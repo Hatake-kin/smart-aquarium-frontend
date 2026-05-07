@@ -69,8 +69,7 @@ const DEFAULT_THRESHOLD: Threshold = {
 };
 
 export default function DashboardPage() {
-  const API_URL = "http://localhost:5000";
-
+const API_URL = "";
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
@@ -770,7 +769,7 @@ export default function DashboardPage() {
             <div style={chartCardStyle}>
               <h3>Nhiệt độ theo thời gian</h3>
 
-              <div style={{ width: "100%", height: 290 }}>
+              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
@@ -821,7 +820,7 @@ export default function DashboardPage() {
             <div style={chartCardStyle}>
               <h3>pH theo thời gian</h3>
 
-              <div style={{ width: "100%", height: 290 }}>
+              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
@@ -872,7 +871,7 @@ export default function DashboardPage() {
             <div style={chartCardStyle}>
               <h3>Mực nước theo thời gian</h3>
 
-              <div style={{ width: "100%", height: 290 }}>
+              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
@@ -910,7 +909,7 @@ export default function DashboardPage() {
             <div style={chartCardStyle}>
               <h3>Pin theo thời gian</h3>
 
-              <div style={{ width: "100%", height: 290 }}>
+              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
@@ -948,7 +947,7 @@ export default function DashboardPage() {
             <div style={chartCardStyle}>
               <h3>RSSI theo thời gian</h3>
 
-              <div style={{ width: "100%", height: 290 }}>
+              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />

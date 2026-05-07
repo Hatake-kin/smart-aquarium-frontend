@@ -1,32 +1,29 @@
-import { io, Socket } from 'socket.io-client';
+import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
-export const connectSocket = (token: string) => {
-  if (socket) socket.disconnect();
-
-  socket = io('http://localhost:5000', {
-    auth: { token },
-    reconnection: true,
-    reconnectionAttempts: 5,
-  });
-
-  socket.on('connect', () => {
-    console.log('Socket.io connected successfully');
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Socket.io disconnected');
-  });
+export function getSocket(token?: string | null) {
+  if (!socket) {
+    socket = io({
+      path: "/realtime",
+      transports: ["polling"],
+      auth: {
+        token: token || "",
+      },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
+  }
 
   return socket;
-};
+}
 
-export const getSocket = () => socket;
-
-export const disconnectSocket = () => {
+export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
     socket = null;
   }
-};
+}
+
+export default getSocket;
