@@ -19,6 +19,11 @@ export function getSocket(token?: string | null) {
   return socket;
 }
 
+// Giữ tên connectSocket để các page cũ đang import không bị lỗi build
+export function connectSocket(token?: string | null) {
+  return getSocket(token);
+}
+
 export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
