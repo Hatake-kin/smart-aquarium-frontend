@@ -155,7 +155,7 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
       setSocketStatus('offline');
     });
 
-    socket.on('connect_error', (err) => {
+    socket.on('connect_error', (err: Error) => {
       console.error('Socket connect error:', err.message);
       setSocketStatus('offline');
     });
