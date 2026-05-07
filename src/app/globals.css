@@ -1,0 +1,393 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fff1f7;
+  --foreground: #3b2632;
+
+  --primary: #ec4899;
+  --primary-soft: #fbcfe8;
+  --primary-light: #fdf2f8;
+  --primary-dark: #be185d;
+
+  --aqua: #67e8f9;
+  --aqua-soft: #ecfeff;
+
+  --card: #ffffff;
+  --border: #f9a8d4;
+  --muted: #8b5f73;
+
+  --danger: #e11d48;
+  --success: #16a34a;
+  --warning: #d97706;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(251, 207, 232, 0.9), transparent 32%),
+    radial-gradient(circle at top right, rgba(186, 230, 253, 0.65), transparent 30%),
+    linear-gradient(135deg, #fff1f7 0%, #fdf2f8 45%, #ecfeff 100%);
+  color: var(--foreground);
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+input,
+select,
+textarea {
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #ec4899 !important;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);
+}
+
+table {
+  font-size: 14px;
+}
+
+th {
+  text-align: left;
+  color: #7a294f;
+}
+
+td {
+  color: #442638;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #fff1f7;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #f9a8d4;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ec4899;
+}
+
+/* Đổi theme xanh trong Tailwind layout sang hồng phấn */
+.bg-blue-600 {
+  background-color: #ec4899 !important;
+}
+
+.bg-blue-500 {
+  background-color: #f472b6 !important;
+}
+
+.text-blue-600 {
+  color: #db2777 !important;
+}
+
+.text-blue-500 {
+  color: #ec4899 !important;
+}
+
+.text-blue-400 {
+  color: #f472b6 !important;
+}
+
+.hover\:text-blue-600:hover {
+  color: #db2777 !important;
+}
+
+.hover\:bg-blue-50:hover {
+  background-color: #fdf2f8 !important;
+}
+
+.shadow-blue-200 {
+  --tw-shadow-color: #fbcfe8 !important;
+}
+
+.border-blue-200 {
+  border-color: #fbcfe8 !important;
+}
+
+.from-blue-500 {
+  --tw-gradient-from: #f472b6 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(244, 114, 182, 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.to-indigo-600 {
+  --tw-gradient-to: #c084fc var(--tw-gradient-to-position) !important;
+}
+
+.bg-white {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.border-slate-200,
+.border-slate-100,
+.border-slate-50 {
+  border-color: #fce7f3 !important;
+}
+
+.text-slate-800 {
+  color: #3b2632 !important;
+}
+
+.text-slate-700 {
+  color: #4a2b3b !important;
+}
+
+.text-slate-500 {
+  color: #8b5f73 !important;
+}
+
+.text-slate-400 {
+  color: #b97996 !important;
+}
+
+.bg-slate-50 {
+  background-color: #fdf2f8 !important;
+}
+
+.hover\:bg-slate-50:hover {
+  background-color: #fdf2f8 !important;
+}
+
+/* Làm card đẹp hơn */
+main section {
+  box-shadow: 0 14px 35px rgba(236, 72, 153, 0.08);
+}
+
+section,
+table {
+  border-color: #f9a8d4 !important;
+}
+
+/* Button mềm hơn, không phá nút Tailwind active */
+button {
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+/* =========================
+   FORM / INPUT / SELECT
+   ========================= */
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #7a294f;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  margin-top: 6px;
+  margin-bottom: 14px;
+  border: 1.5px solid #f9a8d4 !important;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #442638;
+  box-shadow: 0 6px 18px rgba(236, 72, 153, 0.06);
+  transition: all 0.2s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #b97996;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  border-color: #ec4899 !important;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.14);
+}
+
+/* Cho ô select nhìn rõ hơn */
+select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+/* Textarea đẹp hơn */
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* =========================
+   CARD / FORM BOX
+   ========================= */
+
+main section,
+main form,
+main article {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1.5px solid #fbcfe8 !important;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 14px 35px rgba(236, 72, 153, 0.08);
+  backdrop-filter: blur(6px);
+}
+
+/* Nếu có div bọc form mà chưa ra card */
+main > div > div,
+main > div > section {
+  border-radius: 18px;
+}
+
+/* =========================
+   TABLE
+   ========================= */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1.5px solid #fbcfe8 !important;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(236, 72, 153, 0.06);
+}
+
+thead {
+  background: #fdf2f8;
+}
+
+th,
+td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #fce7f3;
+  text-align: left;
+}
+
+th {
+  font-weight: 700;
+  color: #8a2d58;
+}
+
+td {
+  color: #442638;
+}
+
+tr:hover td {
+  background: rgba(253, 242, 248, 0.55);
+}
+
+/* =========================
+   BUTTON
+   ========================= */
+
+button {
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1.5px solid #f9a8d4;
+  background: linear-gradient(135deg, #ffffff, #fdf2f8);
+  color: #7a294f;
+  font-weight: 600;
+  box-shadow: 0 8px 18px rgba(236, 72, 153, 0.08);
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background: linear-gradient(135deg, #fdf2f8, #fce7f3);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+/* Nút đang active kiểu menu hồng thì giữ đẹp */
+.bg-pink-500,
+.bg-pink-600,
+.bg-blue-500,
+.bg-blue-600 {
+  color: white !important;
+}
+
+/* =========================
+   TITLE / SUBTITLE
+   ========================= */
+
+h1,
+h2,
+h3 {
+  color: #4a2236;
+}
+
+p {
+  color: #7a4a62;
+}
+/* =========================
+   SIDEBAR ICON / MENU POLISH
+   ========================= */
+
+aside nav a svg {
+  flex-shrink: 0;
+}
+
+aside nav a {
+  letter-spacing: 0.01em;
+}
+
+aside nav a:hover svg {
+  transform: scale(1.08);
+}
+
+aside nav a svg {
+  transition: transform 0.2s ease;
+}
+
+/* Logo nhìn đậm hơn */
+aside a[href="/"] svg {
+  filter: drop-shadow(0 8px 14px rgba(236, 72, 153, 0.28));
+}
+
+/* Menu active nổi hơn */
+aside nav a.bg-blue-600 {
+  background: linear-gradient(135deg, #ec4899, #db2777) !important;
+  box-shadow: 0 16px 30px rgba(236, 72, 153, 0.28) !important;
+}
