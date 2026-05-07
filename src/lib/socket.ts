@@ -1,7 +1,6 @@
 import io from "socket.io-client";
-import type { Socket } from "socket.io-client";
 
-let socket: Socket | null = null;
+let socket: any = null;
 
 export function getSocket(token?: string | null) {
   if (!socket) {
@@ -20,7 +19,6 @@ export function getSocket(token?: string | null) {
   return socket;
 }
 
-// Giữ tên connectSocket để các page cũ đang import không bị lỗi build
 export function connectSocket(token?: string | null) {
   return getSocket(token);
 }

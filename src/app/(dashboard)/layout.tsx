@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import type { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
 import {
   LayoutDashboard,
@@ -129,7 +128,7 @@ export default function DashboardLayout({
 
     const token = localStorage.getItem('token') || '';
 
-    const socket: Socket = io({
+    const socket = io({
   path: '/realtime',
   transports: ['polling'],
   auth: {
