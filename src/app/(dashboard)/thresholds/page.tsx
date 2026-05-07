@@ -27,7 +27,7 @@ type Threshold = {
 };
 
 export default function ThresholdsPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [thresholds, setThresholds] = useState<Threshold[]>([]);
   const [editingTankId, setEditingTankId] = useState<number | null>(null);

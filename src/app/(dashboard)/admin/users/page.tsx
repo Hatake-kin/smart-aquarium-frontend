@@ -19,7 +19,7 @@ type User = {
 };
 
 export default function AdminUsersPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [users, setUsers] = useState<User[]>([]);
   const [message, setMessage] = useState("");

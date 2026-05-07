@@ -23,7 +23,7 @@ type CameraDevice = {
 };
 
 export default function CameraPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [devices, setDevices] = useState<CameraDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");

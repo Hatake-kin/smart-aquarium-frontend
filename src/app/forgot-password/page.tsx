@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 export default function ForgotPasswordPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [step, setStep] = useState<"request" | "reset">("request");
   const [email, setEmail] = useState("");

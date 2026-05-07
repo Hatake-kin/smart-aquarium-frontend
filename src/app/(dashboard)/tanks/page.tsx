@@ -15,7 +15,7 @@ type Tank = {
 };
 
 export default function TanksPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [name, setName] = useState("");

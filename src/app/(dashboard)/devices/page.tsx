@@ -29,7 +29,7 @@ type Device = {
 };
 
 export default function DevicesPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);

@@ -31,7 +31,7 @@ type Summary = {
 };
 
 export default function SystemLogsPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);

@@ -37,7 +37,7 @@ export default function TankDetailPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-  const API_BASE_URL = 'http://localhost:5000/api';
+  const API_BASE_URL = '/api';
 
   // 1. Lấy danh sách thiết bị khi load trang
   useEffect(() => {

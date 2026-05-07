@@ -38,7 +38,7 @@ type Summary = {
 };
 
 export default function AlertsPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);

@@ -85,7 +85,7 @@ export default function DashboardLayout({
       }
 
       try {
-        const res = await fetch('http://localhost:5000/api/users/me', {
+        const res = await fetch('/api/users/me', {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -129,7 +129,7 @@ export default function DashboardLayout({
 
     const token = localStorage.getItem('token') || '';
 
-    const socket: Socket = io('http://localhost:5000', {
+    const socket: Socket = io({
   path: '/realtime',
   transports: ['polling'],
   auth: {

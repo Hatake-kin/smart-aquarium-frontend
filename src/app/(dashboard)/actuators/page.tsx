@@ -45,7 +45,7 @@ type UserData = {
 };
 
 export default function ActuatorsPage() {
-  const API_URL = "http://localhost:5000";
+  const API_URL = "";
 
   const [controls, setControls] = useState<ControlItem[]>([]);
   const [message, setMessage] = useState("");
