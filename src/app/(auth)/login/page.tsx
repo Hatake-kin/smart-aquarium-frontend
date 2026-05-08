@@ -174,7 +174,23 @@ export default function LoginPage() {
 
           <div style={{ marginTop: 12 }}>
             <p style={{ margin: "8px 0" }}>
-              Chưa có tài khoản? <Link href="/register">Đăng ký</Link>
+              Chưa có tài khoản?{" "}
+<Link
+  href="/register"
+  style={{
+    color: "#9f4772",
+    fontWeight: 600,
+    textDecoration: "none",
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.textDecoration = "underline";
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.textDecoration = "none";
+  }}
+>
+  Đăng ký
+</Link>
             </p>
 
             <p style={{ margin: "8px 0" }}>

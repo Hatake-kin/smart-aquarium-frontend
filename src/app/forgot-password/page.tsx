@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 export default function ForgotPasswordPage() {
@@ -12,8 +13,32 @@ export default function ForgotPasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const passwordInputStyle = {
+    width: "100%",
+    padding: "10px 42px 10px 10px",
+    boxSizing: "border-box" as const,
+  };
+
+  const eyeButtonStyle = {
+    position: "absolute" as const,
+    right: 8,
+    top: "50%",
+    transform: "translateY(-50%)",
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    color: "#9f4772",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 4,
+  };
 
   const requestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,6 +168,7 @@ export default function ForgotPasswordPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Nhập email tài khoản"
               type="email"
+              autoComplete="email"
               style={{ width: "100%", padding: 10 }}
             />
 
@@ -164,34 +190,73 @@ export default function ForgotPasswordPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Nhập email tài khoản"
               type="email"
+              autoComplete="email"
               style={{ width: "100%", padding: 10 }}
             />
 
-            <label>Mã OTP</label>
+            <label style={{ display: "block", marginTop: 12 }}>Mã OTP</label>
             <input
               value={otp}
               onChange={(e) => setOtp(e.target.value.toUpperCase())}
               placeholder="Nhập mã OTP trong Gmail"
-              style={{ width: "100%", padding: 10 }}
+              style={{ width: "100%", padding: 10, textTransform: "uppercase" }}
             />
 
-            <label>Mật khẩu mới</label>
-            <input
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Mật khẩu mới"
-              type="password"
-              style={{ width: "100%", padding: 10 }}
-            />
+            <label style={{ display: "block", marginTop: 12 }}>
+              Mật khẩu mới
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mật khẩu mới"
+                type={showNewPassword ? "text" : "password"}
+                autoComplete="new-password"
+                style={passwordInputStyle}
+              />
 
-            <label>Xác nhận mật khẩu mới</label>
-            <input
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Nhập lại mật khẩu mới"
-              type="password"
-              style={{ width: "100%", padding: 10 }}
-            />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((prev) => !prev)}
+                aria-label={showNewPassword ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"}
+                title={showNewPassword ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"}
+                style={eyeButtonStyle}
+              >
+                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+
+            <label style={{ display: "block", marginTop: 12 }}>
+              Xác nhận mật khẩu mới
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Nhập lại mật khẩu mới"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                style={passwordInputStyle}
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={
+                  showConfirmPassword
+                    ? "Ẩn xác nhận mật khẩu"
+                    : "Hiện xác nhận mật khẩu"
+                }
+                title={
+                  showConfirmPassword
+                    ? "Ẩn xác nhận mật khẩu"
+                    : "Hiện xác nhận mật khẩu"
+                }
+                style={eyeButtonStyle}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <button type="submit" disabled={loading}>
