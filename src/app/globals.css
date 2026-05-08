@@ -391,3 +391,103 @@ aside nav a.bg-blue-600 {
   background: linear-gradient(135deg, #ec4899, #db2777) !important;
   box-shadow: 0 16px 30px rgba(236, 72, 153, 0.28) !important;
 }
+/* ========================= PROFILE PAGE CLEAN THEME ========================= */
+
+.profile-page {
+  color: #1f2937;
+}
+
+.profile-page h1,
+.profile-page h2,
+.profile-page h3 {
+  color: #111827 !important;
+}
+
+.profile-page p,
+.profile-page label {
+  color: #374151 !important;
+}
+
+.profile-page form {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.profile-page input:not([type="checkbox"]):not([type="radio"]),
+.profile-page select,
+.profile-page textarea {
+  width: 100%;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border: 1.5px solid #d1d5db !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  box-shadow: none !important;
+}
+
+.profile-page input:not([type="checkbox"]):not([type="radio"]):focus,
+.profile-page select:focus,
+.profile-page textarea:focus {
+  border-color: #0891b2 !important;
+  box-shadow: 0 0 0 4px rgba(8, 145, 178, 0.14) !important;
+}
+
+.profile-page button {
+  transform: none !important;
+}
+
+.profile-page button[type="submit"] {
+  background: #0891b2 !important;
+  color: #ffffff !important;
+  border: 1.5px solid #0891b2 !important;
+  box-shadow: 0 10px 22px rgba(8, 145, 178, 0.18) !important;
+}
+
+.profile-page button[type="submit"]:hover {
+  background: #0e7490 !important;
+  border-color: #0e7490 !important;
+}
+
+.profile-page button[type="submit"]:disabled {
+  background: #94a3b8 !important;
+  border-color: #94a3b8 !important;
+  color: #ffffff !important;
+  opacity: 0.65 !important;
+}
+
+.profile-page .relative button[type="button"] {
+  width: 42px !important;
+  height: 38px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  color: #0f766e !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: none !important;
+}
+
+.profile-page .relative button[type="button"]:hover {
+  background: #ecfeff !important;
+  border-color: #67e8f9 !important;
+  color: #0e7490 !important;
+}
+
+.profile-page .bg-white {
+  background: #ffffff !important;
+}
+
+.profile-page .border-gray-100 {
+  border-color: #e5e7eb !important;
+}
+
+.profile-page .text-gray-900 {
+  color: #111827 !important;
+}
+
+.profile-page .text-gray-600,
+.profile-page .text-gray-500 {
+  color: #4b5563 !important;
+}
