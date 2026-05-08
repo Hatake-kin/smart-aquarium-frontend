@@ -159,7 +159,7 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-10">
+    <div className="profile-page max-w-2xl mx-auto space-y-10">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">
           Thông tin cá nhân
@@ -177,7 +177,10 @@ export default function ProfilePage() {
             <p className="text-lg font-medium text-gray-900">{user.email}</p>
           </div>
 
-          <form onSubmit={handleUpdateProfile} className="space-y-4">
+          <form
+          onSubmit={handleUpdateProfile}
+         className="space-y-4 !bg-transparent !border-0 !p-0 !shadow-none"
+          >
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-1">
                 Họ và tên
@@ -193,7 +196,7 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={updating}
-              className="bg-blue-600 text-white px-6 py-3 rounded-2xl hover:bg-blue-700 transition disabled:opacity-70"
+              className="!bg-cyan-600 !text-white !border-cyan-600 px-6 py-3 rounded-2xl hover:!bg-cyan-700 transition disabled:opacity-70"
             >
               {updating ? "Đang cập nhật..." : "Cập nhật thông tin"}
             </button>
@@ -203,7 +206,10 @@ export default function ProfilePage() {
 
       <div className="bg-white rounded-3xl p-8 border border-gray-100">
         <h2 className="text-xl font-semibold mb-6">Đổi mật khẩu</h2>
-        <form onSubmit={handleChangePassword} className="space-y-4">
+        <form
+          onSubmit={handleChangePassword}
+          className="space-y-4 !bg-transparent !border-0 !p-0 !shadow-none"
+          >
           <div>
             <label className="block text-sm font-medium text-gray-500 mb-1">
               Mật khẩu cũ
@@ -308,7 +314,7 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={changingPassword}
-            className="bg-gray-800 text-white px-6 py-3 rounded-2xl hover:bg-gray-900 transition disabled:opacity-70"
+            className="!bg-slate-800 !text-white !border-slate-800 px-6 py-3 rounded-2xl hover:!bg-slate-900 transition disabled:opacity-70"
           >
             {changingPassword ? "Đang đổi mật khẩu..." : "Đổi mật khẩu"}
           </button>
