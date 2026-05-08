@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
-import io from 'socket.io-client';
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import io from "socket.io-client";
 import {
   LayoutDashboard,
   Fish,
@@ -22,14 +22,14 @@ import {
   Waves,
   X,
   CheckCheck,
-} from 'lucide-react';
+} from "lucide-react";
 
 type UserData = {
   id?: number;
   name?: string;
   full_name?: string;
   email?: string;
-  role?: 'user' | 'admin' | 'moderator';
+  role?: "user" | "admin" | "moderator";
 };
 
 type NavItem = {
@@ -44,7 +44,7 @@ type RealtimeNotification = {
   id: string;
   tankId?: number;
   message: string;
-  severity?: 'low' | 'medium' | 'high' | string;
+  severity?: "low" | "medium" | "high" | string;
   timestamp: string;
 };
 
@@ -63,20 +63,48 @@ export default function DashboardLayout({
   const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [socketStatus, setSocketStatus] = useState<'online' | 'offline'>(
-    'offline'
+  const [socketStatus, setSocketStatus] = useState<"online" | "offline">(
+    "offline"
   );
 
+  const [greeting, setGreeting] = useState("Chào bạn");
+
+  const updateGreeting = useCallback(() => {
+    const hour = new Date().getHours();
+
+    if (hour >= 5 && hour < 11) {
+      setGreeting("Chào buổi sáng");
+    } else if (hour >= 11 && hour < 13) {
+      setGreeting("Chào buổi trưa");
+    } else if (hour >= 13 && hour < 18) {
+      setGreeting("Chào buổi chiều");
+    } else if (hour >= 18 && hour < 22) {
+      setGreeting("Chào buổi tối");
+    } else {
+      setGreeting("Chào buổi khuya");
+    }
+  }, []);
+
+  useEffect(() => {
+    updateGreeting();
+
+    const timer = setInterval(() => {
+      updateGreeting();
+    }, 60 * 1000);
+
+    return () => clearInterval(timer);
+  }, [updateGreeting]);
+
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setIsAuthenticated(false);
-    router.replace('/login');
+    router.replace("/login");
   }, [router]);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
 
       if (!token) {
         handleLogout();
@@ -84,23 +112,23 @@ export default function DashboardLayout({
       }
 
       try {
-        const res = await fetch('/api/users/me', {
-          method: 'GET',
+        const res = await fetch("/api/users/me", {
+          method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
         });
 
         if (!res.ok) {
-          throw new Error('Session expired');
+          throw new Error("Session expired");
         }
 
         const data = await res.json();
 
         const apiUser = data.user || data;
 
-        const rawLocalUser = localStorage.getItem('user');
+        const rawLocalUser = localStorage.getItem("user");
         const localUser = rawLocalUser ? JSON.parse(rawLocalUser) : {};
 
         const finalUser = {
@@ -112,7 +140,7 @@ export default function DashboardLayout({
         setUserData(finalUser);
         setIsAuthenticated(true);
       } catch (error) {
-        console.error('Xác thực thất bại:', error);
+        console.error("Xác thực thất bại:", error);
         handleLogout();
       } finally {
         setIsLoading(false);
@@ -122,50 +150,48 @@ export default function DashboardLayout({
     checkAuth();
   }, [handleLogout]);
 
-  // Realtime socket alert
   useEffect(() => {
     if (!isAuthenticated || !userData?.id) return;
 
-    const token = localStorage.getItem('token') || '';
+    const token = localStorage.getItem("token") || "";
 
     const socket = io({
-  path: '/realtime',
-  transports: ['polling'],
-  auth: {
-    token,
-  },
-  reconnection: true,
-  reconnectionAttempts: 10,
-  reconnectionDelay: 1000,
-});
-
-    socket.on('connect', () => {
-      setSocketStatus('online');
-
-      // Dùng cả 2 event để tránh lệch tên bên backend
-      socket.emit('join_user_room', userData.id);
-socket.emit('join_user', userData.id);
-
-if (userData.role === 'admin' || userData.role === 'moderator') {
-  socket.emit('join_manager_room', userData.role);
-}
+      path: "/realtime",
+      transports: ["polling"],
+      auth: {
+        token,
+      },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
     });
 
-    socket.on('disconnect', () => {
-      setSocketStatus('offline');
+    socket.on("connect", () => {
+      setSocketStatus("online");
+
+      socket.emit("join_user_room", userData.id);
+      socket.emit("join_user", userData.id);
+
+      if (userData.role === "admin" || userData.role === "moderator") {
+        socket.emit("join_manager_room", userData.role);
+      }
     });
 
-    socket.on('connect_error', (err: Error) => {
-      console.error('Socket connect error:', err.message);
-      setSocketStatus('offline');
+    socket.on("disconnect", () => {
+      setSocketStatus("offline");
     });
 
-    socket.on('alert', (payload: any) => {
+    socket.on("connect_error", (err: Error) => {
+      console.error("Socket connect error:", err.message);
+      setSocketStatus("offline");
+    });
+
+    socket.on("alert", (payload: any) => {
       const item: RealtimeNotification = {
         id: `${Date.now()}_${Math.random()}`,
         tankId: payload.tankId || payload.tank_id,
-        message: payload.message || 'Có cảnh báo mới từ hệ thống',
-        severity: payload.severity || 'medium',
+        message: payload.message || "Có cảnh báo mới từ hệ thống",
+        severity: payload.severity || "medium",
         timestamp: payload.timestamp || new Date().toISOString(),
       };
 
@@ -173,15 +199,17 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
       setUnreadCount((prev) => prev + 1);
     });
 
-    socket.on('sensor_update', (payload: any) => {
-      // Chỉ tạo thông báo nếu backend gửi kèm alert trong sensor_update
+    socket.on("sensor_update", (payload: any) => {
       if (!payload?.alert && !payload?.message) return;
 
       const item: RealtimeNotification = {
         id: `${Date.now()}_${Math.random()}`,
         tankId: payload.tankId || payload.tank_id,
-        message: payload.message || payload.alert || 'Dữ liệu cảm biến bất thường',
-        severity: payload.severity || 'medium',
+        message:
+          payload.message ||
+          payload.alert ||
+          "Dữ liệu cảm biến bất thường",
+        severity: payload.severity || "medium",
         timestamp: payload.timestamp || new Date().toISOString(),
       };
 
@@ -192,44 +220,45 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
     return () => {
       socket.disconnect();
     };
-}, [isAuthenticated, userData?.id, userData?.role]);
+  }, [isAuthenticated, userData?.id, userData?.role]);
+
   const isActive = (path: string) => {
-    if (path === '/') return pathname === '/';
+    if (path === "/") return pathname === "/";
     return pathname.startsWith(path);
   };
 
   const navigation: NavItem[] = [
-    { name: 'Tổng quan', href: '/', icon: LayoutDashboard },
-    { name: 'Bể cá của tôi', href: '/tanks', icon: Fish },
-    { name: 'Thiết bị', href: '/devices', icon: Cpu },
-    { name: 'Điều khiển', href: '/actuators', icon: Power },
-    { name: 'Camera', href: '/camera', icon: Camera },
-    { name: 'Cài đặt ngưỡng', href: '/thresholds', icon: SlidersHorizontal },
-    { name: 'Lịch sử cảnh báo', href: '/alerts', icon: TriangleAlert },
+    { name: "Tổng quan", href: "/", icon: LayoutDashboard },
+    { name: "Bể cá của tôi", href: "/tanks", icon: Fish },
+    { name: "Thiết bị", href: "/devices", icon: Cpu },
+    { name: "Điều khiển", href: "/actuators", icon: Power },
+    { name: "Camera", href: "/camera", icon: Camera },
+    { name: "Cài đặt ngưỡng", href: "/thresholds", icon: SlidersHorizontal },
+    { name: "Lịch sử cảnh báo", href: "/alerts", icon: TriangleAlert },
     {
-      name: 'Nhật ký hệ thống',
-      href: '/system-logs',
+      name: "Nhật ký hệ thống",
+      href: "/system-logs",
       icon: FileText,
       managerOnly: true,
     },
     {
-      name: 'Quản lý người dùng',
-      href: '/admin/users',
+      name: "Quản lý người dùng",
+      href: "/admin/users",
       icon: Users,
       managerOnly: true,
     },
-    { name: 'Cá nhân', href: '/profile', icon: UserCircle },
+    { name: "Cá nhân", href: "/profile", icon: UserCircle },
   ];
 
   const visibleNavigation = navigation.filter((item) => {
-    if (item.adminOnly && userData?.role !== 'admin') {
+    if (item.adminOnly && userData?.role !== "admin") {
       return false;
     }
 
     if (
       item.managerOnly &&
-      userData?.role !== 'admin' &&
-      userData?.role !== 'moderator'
+      userData?.role !== "admin" &&
+      userData?.role !== "moderator"
     ) {
       return false;
     }
@@ -238,69 +267,69 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
   });
 
   const displayName =
-    userData?.name || userData?.full_name || userData?.email || 'User';
+    userData?.name || userData?.full_name || userData?.email || "User";
 
   const roleLabel =
-    userData?.role === 'admin'
-      ? 'Quản trị viên'
-      : userData?.role === 'moderator'
-      ? 'Điều phối viên'
-      : 'Thành viên SmartAquarium';
+    userData?.role === "admin"
+      ? "Quản trị viên"
+      : userData?.role === "moderator"
+      ? "Điều phối viên"
+      : "Thành viên SmartAquarium";
 
-  const pageTitle = isActive('/')
-    ? 'Bảng điều khiển'
-    : isActive('/tanks')
-    ? 'Quản lý bể cá'
-    : isActive('/devices')
-    ? 'Quản lý thiết bị'
-    : isActive('/actuators')
-    ? 'Điều khiển thiết bị'
-    : isActive('/camera')
-    ? 'Camera'
-    : isActive('/thresholds')
-    ? 'Cài đặt ngưỡng'
-    : isActive('/alerts')
-    ? 'Lịch sử cảnh báo'
-    : isActive('/system-logs')
-    ? 'Nhật ký hệ thống'
-    : isActive('/admin/users')
-    ? 'Quản lý người dùng'
-    : isActive('/profile')
-    ? 'Thông tin cá nhân'
-    : 'Smart Aquarium';
+  const pageTitle = isActive("/")
+    ? "Bảng điều khiển"
+    : isActive("/tanks")
+    ? "Quản lý bể cá"
+    : isActive("/devices")
+    ? "Quản lý thiết bị"
+    : isActive("/actuators")
+    ? "Điều khiển thiết bị"
+    : isActive("/camera")
+    ? "Camera"
+    : isActive("/thresholds")
+    ? "Cài đặt ngưỡng"
+    : isActive("/alerts")
+    ? "Lịch sử cảnh báo"
+    : isActive("/system-logs")
+    ? "Nhật ký hệ thống"
+    : isActive("/admin/users")
+    ? "Quản lý người dùng"
+    : isActive("/profile")
+    ? "Thông tin cá nhân"
+    : "Smart Aquarium";
 
   const formatTime = (value: string) => {
     try {
-      return new Date(value).toLocaleString();
+      return new Date(value).toLocaleString("vi-VN");
     } catch {
       return value;
     }
   };
 
   const getSeverityStyle = (severity?: string) => {
-    if (severity === 'high') {
+    if (severity === "high") {
       return {
-        color: '#dc2626',
-        background: '#fff1f2',
-        border: '#fecdd3',
-        label: 'Nghiêm trọng',
+        color: "#dc2626",
+        background: "#fff1f2",
+        border: "#fecdd3",
+        label: "Nghiêm trọng",
       };
     }
 
-    if (severity === 'low') {
+    if (severity === "low") {
       return {
-        color: '#2563eb',
-        background: '#eff6ff',
-        border: '#bfdbfe',
-        label: 'Nhẹ',
+        color: "#2563eb",
+        background: "#eff6ff",
+        border: "#bfdbfe",
+        label: "Nhẹ",
       };
     }
 
     return {
-      color: '#d97706',
-      background: '#fffbeb',
-      border: '#fde68a',
-      label: 'Trung bình',
+      color: "#d97706",
+      background: "#fffbeb",
+      border: "#fde68a",
+      label: "Trung bình",
     };
   };
 
@@ -322,7 +351,6 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
 
   return (
     <div className="min-h-screen bg-[#f1f5f9] flex">
-      {/* Sidebar */}
       <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-xl shadow-slate-200/50">
         <div className="p-8 border-b border-slate-50">
           <Link href="/" className="flex items-center gap-3 group">
@@ -337,7 +365,7 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
 
         <nav className="flex-1 p-6 space-y-2">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-4">
-            Menu Chính
+            Menu chính
           </p>
 
           {visibleNavigation.map((item) => (
@@ -346,8 +374,8 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
               href={item.href}
               className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
                 isActive(item.href)
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-blue-600'
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-blue-600"
               }`}
             >
               <div className="flex items-center gap-3 font-bold text-sm">
@@ -379,16 +407,14 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col ml-72">
-        {/* Header */}
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-100 px-10 flex items-center justify-between sticky top-0 z-10">
           <div>
             <h2 className="text-slate-800 font-black text-xl tracking-tight">
               {pageTitle}
             </h2>
             <p className="text-xs text-slate-400 font-medium mt-0.5">
-              Chào buổi sáng, {displayName}!
+              {greeting}, {displayName}!
             </p>
           </div>
 
@@ -401,22 +427,22 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
                 }}
                 className="relative p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all group"
                 title={
-                  socketStatus === 'online'
-                    ? 'Thông báo realtime đang kết nối'
-                    : 'Thông báo realtime chưa kết nối'
+                  socketStatus === "online"
+                    ? "Thông báo realtime đang kết nối"
+                    : "Thông báo realtime chưa kết nối"
                 }
               >
                 <Bell size={22} />
 
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
 
                 <span
                   className={`absolute bottom-1 right-1 w-2 h-2 rounded-full border border-white ${
-                    socketStatus === 'online' ? 'bg-green-500' : 'bg-slate-400'
+                    socketStatus === "online" ? "bg-green-500" : "bg-slate-400"
                   }`}
                 />
               </button>
@@ -429,17 +455,17 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
                         Thông báo realtime
                       </h3>
                       <p className="text-xs text-slate-400 mt-1">
-                        Trạng thái:{' '}
+                        Trạng thái:{" "}
                         <b
                           className={
-                            socketStatus === 'online'
-                              ? 'text-green-600'
-                              : 'text-red-500'
+                            socketStatus === "online"
+                              ? "text-green-600"
+                              : "text-red-500"
                           }
                         >
-                          {socketStatus === 'online'
-                            ? 'Đang kết nối'
-                            : 'Mất kết nối'}
+                          {socketStatus === "online"
+                            ? "Đang kết nối"
+                            : "Mất kết nối"}
                         </b>
                       </p>
                     </div>
@@ -459,7 +485,8 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
                           Chưa có thông báo mới
                         </p>
                         <p className="text-xs text-slate-400 mt-2">
-                          Khi MQTT phát hiện cảnh báo, thông báo sẽ xuất hiện ở đây.
+                          Khi MQTT phát hiện cảnh báo, thông báo sẽ xuất hiện ở
+                          đây.
                         </p>
                       </div>
                     )}
@@ -560,7 +587,6 @@ if (userData.role === 'admin' || userData.role === 'moderator') {
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 p-10">
           <div className="max-w-7xl mx-auto animate-in fade-in zoom-in-95 duration-700">
             {children}
