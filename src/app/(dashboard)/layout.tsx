@@ -268,6 +268,7 @@ export default function DashboardLayout({
     { name: "Tổng quan", href: "/", icon: LayoutDashboard },
     { name: "Bể cá của tôi", href: "/tanks", icon: Fish },
     { name: "Thiết bị", href: "/devices", icon: Cpu },
+    { name: "Cấu hình module", href: "/modules", icon: SlidersHorizontal },
     { name: "Điều khiển", href: "/actuators", icon: Power },
     { name: "Camera", href: "/camera", icon: Camera },
     { name: "Cài đặt ngưỡng", href: "/thresholds", icon: SlidersHorizontal },
@@ -319,6 +320,8 @@ export default function DashboardLayout({
     ? "Quản lý bể cá"
     : isActive("/devices")
     ? "Quản lý thiết bị"
+    : isActive("/modules")
+    ? "Cấu hình module"
     : isActive("/actuators")
     ? "Điều khiển thiết bị"
     : isActive("/camera")
