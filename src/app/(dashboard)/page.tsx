@@ -74,14 +74,43 @@ const parseServerDate = (value?: string | null) => {
   if (!value) return null;
 
   const raw = String(value).trim();
-
   const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
   const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
-  const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
 
-  if (Number.isNaN(date.getTime())) return null;
+  const candidates: Date[] = [];
 
-  return date;
+  const addCandidate = (date: Date) => {
+    if (!Number.isNaN(date.getTime())) {
+      candidates.push(date);
+    }
+  };
+
+  if (hasTimezone) {
+    const parsed = new Date(normalized);
+    addCandidate(parsed);
+
+    // Fix trường hợp backend/DB đã lưu giờ Việt Nam nhưng driver lại gắn Z.
+    // Nếu bị lệch 7 tiếng, bản +7h sẽ gần thời điểm hiện tại hơn.
+    addCandidate(new Date(parsed.getTime() + 7 * 60 * 60 * 1000));
+  } else {
+    const asUtc = new Date(`${normalized}Z`);
+    const asLocal = new Date(normalized);
+
+    addCandidate(asUtc);
+    addCandidate(asLocal);
+    addCandidate(new Date(asUtc.getTime() + 7 * 60 * 60 * 1000));
+    addCandidate(new Date(asLocal.getTime() + 7 * 60 * 60 * 1000));
+  }
+
+  if (candidates.length === 0) return null;
+
+  const now = Date.now();
+
+  candidates.sort(
+    (a, b) => Math.abs(now - a.getTime()) - Math.abs(now - b.getTime())
+  );
+
+  return candidates[0];
 };
 
 const formatServerDateTime = (value?: string | null) => {
@@ -90,7 +119,6 @@ const formatServerDateTime = (value?: string | null) => {
   if (!date) return "";
 
   return date.toLocaleString("vi-VN", {
-    timeZone: VI_TIME_ZONE,
     hour12: false,
   });
 };
@@ -101,7 +129,6 @@ const formatServerTime = (value?: string | null) => {
   if (!date) return "";
 
   return date.toLocaleTimeString("vi-VN", {
-    timeZone: VI_TIME_ZONE,
     hour12: false,
   });
 };
