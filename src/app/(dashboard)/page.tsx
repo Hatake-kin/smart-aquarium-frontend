@@ -68,8 +68,47 @@ const DEFAULT_THRESHOLD: Threshold = {
   rssi_min: -80,
 };
 
+const VI_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+const parseServerDate = (value?: string | null) => {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date;
+};
+
+const formatServerDateTime = (value?: string | null) => {
+  const date = parseServerDate(value);
+
+  if (!date) return "";
+
+  return date.toLocaleString("vi-VN", {
+    timeZone: VI_TIME_ZONE,
+    hour12: false,
+  });
+};
+
+const formatServerTime = (value?: string | null) => {
+  const date = parseServerDate(value);
+
+  if (!date) return "";
+
+  return date.toLocaleTimeString("vi-VN", {
+    timeZone: VI_TIME_ZONE,
+    hour12: false,
+  });
+};
+
 export default function DashboardPage() {
-const API_URL = "";
+  const API_URL = "";
+
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
@@ -186,7 +225,7 @@ const API_URL = "";
 
       setSensorData(data.data);
       setMessage("");
-      setLastUpdate(new Date().toLocaleString());
+      setLastUpdate(new Date().toLocaleString("vi-VN", { hour12: false }));
     } catch (err) {
       console.error(err);
       setMessage("Không kết nối được backend");
@@ -224,7 +263,7 @@ const API_URL = "";
 
       const formatted = (data.data || []).map((item: any) => ({
         ...item,
-        time: new Date(item.created_at).toLocaleTimeString(),
+        time: formatServerTime(item.created_at),
       }));
 
       setHistoryData(formatted);
@@ -320,7 +359,7 @@ const API_URL = "";
         description:
           "Thiết bị đang bị tạm khóa do gói dịch vụ hoặc cấu hình hệ thống.",
         lastSeenText: device.last_seen
-          ? `Lần gửi MQTT cuối: ${new Date(device.last_seen).toLocaleString()}`
+          ? `Lần gửi MQTT cuối: ${formatServerDateTime(device.last_seen)}`
           : "",
       };
     }
@@ -338,9 +377,9 @@ const API_URL = "";
       };
     }
 
-    const lastSeenTime = new Date(lastSeenRaw).getTime();
+    const lastSeenDate = parseServerDate(lastSeenRaw);
 
-    if (Number.isNaN(lastSeenTime)) {
+    if (!lastSeenDate) {
       return {
         label: "Không xác định",
         color: "#64748b",
@@ -351,8 +390,11 @@ const API_URL = "";
       };
     }
 
-    const diffMs = Date.now() - lastSeenTime;
-    const diffMinutes = diffMs / 1000 / 60;
+    const diffMs = Date.now() - lastSeenDate.getTime();
+    const diffMinutes = Math.max(0, diffMs / 1000 / 60);
+    const lastSeenText = `Lần gửi MQTT cuối: ${formatServerDateTime(
+      lastSeenRaw
+    )}`;
 
     if (diffMinutes <= 2) {
       return {
@@ -360,10 +402,9 @@ const API_URL = "";
         color: "#16a34a",
         background: "#f0fdf4",
         border: "#86efac",
-        description: "Thiết bị đang kết nối và vừa gửi dữ liệu về hệ thống.",
-        lastSeenText: `Lần gửi MQTT cuối: ${new Date(
-          lastSeenRaw
-        ).toLocaleString()}`,
+        description:
+          "Thiết bị đang kết nối và vừa gửi dữ liệu về hệ thống.",
+        lastSeenText,
       };
     }
 
@@ -375,9 +416,7 @@ const API_URL = "";
       description: `Thiết bị chưa gửi dữ liệu hơn ${Math.round(
         diffMinutes
       )} phút.`,
-      lastSeenText: `Lần gửi MQTT cuối: ${new Date(
-        lastSeenRaw
-      ).toLocaleString()}`,
+      lastSeenText,
     };
   };
 
@@ -446,7 +485,7 @@ const API_URL = "";
 
   const chartCardStyle = {
     minHeight: 380,
-    border: "1px solid #f9a8d4",
+    border: "1px solid #67e8f9",
     padding: 18,
     marginBottom: 24,
     background: "rgba(255,255,255,0.9)",
@@ -454,7 +493,7 @@ const API_URL = "";
   };
 
   const metricCardStyle = {
-    border: "1px solid #f9a8d4",
+    border: "1px solid #67e8f9",
     padding: 16,
     borderRadius: 16,
     background: "rgba(255,255,255,0.88)",
@@ -478,7 +517,7 @@ const API_URL = "";
         <b style={{ color: "#dc2626" }}>━━</b> Ngưỡng cao / Max
       </span>
       <span>
-        <b style={{ color: "#ec4899" }}>━━</b> Giá trị cảm biến
+        <b style={{ color: "#0891b2" }}>━━</b> Giá trị cảm biến
       </span>
     </div>
   );
@@ -490,7 +529,7 @@ const API_URL = "";
 
       <section
         style={{
-          border: "1px solid #f9a8d4",
+          border: "1px solid #67e8f9",
           padding: 16,
           borderRadius: 18,
           marginBottom: 24,
@@ -533,13 +572,13 @@ const API_URL = "";
                   style={{
                     margin: 0,
                     fontWeight: "bold",
-                    color: "#4a2236",
+                    color: "#0f172a",
                   }}
                 >
                   Trạng thái kết nối thiết bị
                 </p>
 
-                <p style={{ margin: "6px 0 0", color: "#7a4a62" }}>
+                <p style={{ margin: "6px 0 0", color: "#334155" }}>
                   {deviceConnection.description}
                 </p>
 
@@ -547,7 +586,7 @@ const API_URL = "";
                   <p
                     style={{
                       margin: "6px 0 0",
-                      color: "#8b5f73",
+                      color: "#475569",
                       fontSize: 13,
                     }}
                   >
@@ -654,7 +693,7 @@ const API_URL = "";
         {planMeta?.device?.plan_expires_at && (
           <p>
             <b>Hạn Premium:</b>{" "}
-            {new Date(planMeta.device.plan_expires_at).toLocaleString()}
+            {formatServerDateTime(planMeta.device.plan_expires_at)}
           </p>
         )}
       </section>
@@ -707,7 +746,9 @@ const API_URL = "";
       <section>
         <h2>Dữ liệu mới nhất</h2>
 
-        {!sensorData && <p>Chưa có dữ liệu cảm biến cho thiết bị này.</p>}
+        {!sensorData && (
+          <p>Chưa có dữ liệu cảm biến cho thiết bị này.</p>
+        )}
 
         {sensorData && (
           <div
@@ -744,7 +785,7 @@ const API_URL = "";
 
             <div style={metricCardStyle}>
               <h3>Cập nhật lúc</h3>
-              <p>{new Date(sensorData.created_at).toLocaleString()}</p>
+              <p>{formatServerDateTime(sensorData.created_at)}</p>
             </div>
           </div>
         )}
@@ -769,10 +810,17 @@ const API_URL = "";
             <div style={chartCardStyle}>
               <h3>Nhiệt độ theo thời gian</h3>
 
-              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
+              <div
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  height: 290,
+                  minHeight: 290,
+                }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
                     <XAxis dataKey="time" />
                     <YAxis />
                     <Tooltip />
@@ -807,7 +855,7 @@ const API_URL = "";
                       type="monotone"
                       dataKey="temperature"
                       name="Nhiệt độ"
-                      stroke="#ec4899"
+                      stroke="#0891b2"
                       strokeWidth={2.4}
                       dot={{ r: 3 }}
                       activeDot={{ r: 6 }}
@@ -820,10 +868,17 @@ const API_URL = "";
             <div style={chartCardStyle}>
               <h3>pH theo thời gian</h3>
 
-              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
+              <div
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  height: 290,
+                  minHeight: 290,
+                }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
                     <XAxis dataKey="time" />
                     <YAxis domain={[0, 14]} />
                     <Tooltip />
@@ -858,7 +913,7 @@ const API_URL = "";
                       type="monotone"
                       dataKey="ph"
                       name="pH"
-                      stroke="#ec4899"
+                      stroke="#0891b2"
                       strokeWidth={2.4}
                       dot={{ r: 3 }}
                       activeDot={{ r: 6 }}
@@ -871,10 +926,17 @@ const API_URL = "";
             <div style={chartCardStyle}>
               <h3>Mực nước theo thời gian</h3>
 
-              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
+              <div
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  height: 290,
+                  minHeight: 290,
+                }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
                     <XAxis dataKey="time" />
                     <YAxis domain={[0, 100]} />
                     <Tooltip />
@@ -896,7 +958,7 @@ const API_URL = "";
                       type="monotone"
                       dataKey="water_level"
                       name="Mực nước"
-                      stroke="#ec4899"
+                      stroke="#0891b2"
                       strokeWidth={2.4}
                       dot={{ r: 3 }}
                       activeDot={{ r: 6 }}
@@ -909,10 +971,17 @@ const API_URL = "";
             <div style={chartCardStyle}>
               <h3>Pin theo thời gian</h3>
 
-              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
+              <div
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  height: 290,
+                  minHeight: 290,
+                }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
                     <XAxis dataKey="time" />
                     <YAxis domain={[0, 100]} />
                     <Tooltip />
@@ -934,7 +1003,7 @@ const API_URL = "";
                       type="monotone"
                       dataKey="battery"
                       name="Pin"
-                      stroke="#ec4899"
+                      stroke="#0891b2"
                       strokeWidth={2.4}
                       dot={{ r: 3 }}
                       activeDot={{ r: 6 }}
@@ -947,10 +1016,17 @@ const API_URL = "";
             <div style={chartCardStyle}>
               <h3>RSSI theo thời gian</h3>
 
-              <div style={{ width: "100%", minWidth: 0, height: 290, minHeight: 290 }}>
+              <div
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  height: 290,
+                  minHeight: 290,
+                }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3d7e5" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
                     <XAxis dataKey="time" />
                     <YAxis />
                     <Tooltip />
@@ -972,7 +1048,7 @@ const API_URL = "";
                       type="monotone"
                       dataKey="rssi"
                       name="RSSI"
-                      stroke="#ec4899"
+                      stroke="#0891b2"
                       strokeWidth={2.4}
                       dot={{ r: 3 }}
                       activeDot={{ r: 6 }}
