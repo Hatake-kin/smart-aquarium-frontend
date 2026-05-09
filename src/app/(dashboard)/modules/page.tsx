@@ -1,6 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type DeviceInfo = {
+  id: number;
+  tank_id: number;
+  device_code: string;
+  name: string;
+  status?: string;
+  tank_name?: string;
+  tank_code?: string;
+  tank_status?: string;
+  owner_id?: number;
+  owner_email?: string;
+};
+
+type TankOption = {
+  id: number;
+  name: string;
+  code?: string;
+  owner_email?: string;
+};
 
 type ModuleItem = {
   id: number;
@@ -27,7 +47,7 @@ type ModuleItem = {
   config_json?: any;
 };
 
-type Options = {
+type ModuleOptions = {
   gpio_pins: number[];
   connection_types: string[];
   io_modes: string[];
@@ -36,13 +56,402 @@ type Options = {
   wireless_protocols: string[];
 };
 
+type DeviceModuleResponse = {
+  message: string;
+  device?: any;
+  modules?: ModuleItem[];
+  gpio?: {
+    safe_pins: number[];
+    used_pins: {
+      pin: number;
+      module_id: number;
+      module_name: string;
+      module_type: string;
+    }[];
+    free_pins: number[];
+  };
+};
+
+type MessageType = "idle" | "success" | "error" | "loading";
+
+const defaultConfigByType = (moduleType: string) => {
+  switch (moduleType) {
+    case "ds18b20":
+      return {
+        read_interval_ms: 5000,
+      };
+
+    case "hc_sr04":
+      return {
+        trig_pin: 4,
+        echo_pin: 5,
+        tank_depth_cm: 30,
+        mount_offset_cm: 0,
+        read_interval_ms: 5000,
+      };
+
+    case "ph_sensor":
+      return {
+        analog_pin: 34,
+        read_interval_ms: 5000,
+        calibration_offset: 0,
+      };
+
+    case "turbidity_sensor":
+      return {
+        analog_pin: 35,
+        read_interval_ms: 5000,
+      };
+
+    case "dht22":
+      return {
+        read_interval_ms: 5000,
+      };
+
+    case "light":
+      return {
+        active_high: true,
+      };
+
+    case "servo_feeder":
+      return {
+        default_angle: 0,
+        feed_angle: 90,
+        duration_ms: 900,
+      };
+
+    case "pump":
+    case "oxygen":
+    case "buzzer":
+    case "relay":
+      return {
+        active_high: true,
+      };
+
+    default:
+      return {};
+  }
+};
+
+const defaultUnitByType = (moduleType: string) => {
+  switch (moduleType) {
+    case "ds18b20":
+      return "°C";
+    case "hc_sr04":
+      return "%";
+    case "ph_sensor":
+      return "pH";
+    case "turbidity_sensor":
+      return "NTU";
+    case "dht22":
+      return "%";
+    default:
+      return "";
+  }
+};
+
+const MODULE_META: Record<
+  string,
+  {
+    label: string;
+    defaultName: string;
+    codeBase: string;
+    description: string;
+    pinLabels: [string, string, string];
+    pinPlaceholders: [string, string, string];
+  }
+> = {
+  ds18b20: {
+    label: "Cảm biến nhiệt độ nước DS18B20",
+    defaultName: "Cảm biến nhiệt độ nước",
+    codeBase: "temp_ds18b20_main",
+    description:
+      "Đo nhiệt độ nước bằng cảm biến DS18B20. User chỉ cần chọn chân DATA.",
+    pinLabels: ["Chân DATA của DS18B20", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân DATA --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  hc_sr04: {
+    label: "Cảm biến mực nước HC-SR04",
+    defaultName: "Cảm biến mực nước",
+    codeBase: "water_hcsr04_main",
+    description:
+      "Đo khoảng cách tới mặt nước. Cần 2 chân: TRIG để phát xung và ECHO để nhận tín hiệu.",
+    pinLabels: ["Chân TRIG của HC-SR04", "Chân ECHO của HC-SR04", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân TRIG --",
+      "-- Chọn chân ECHO --",
+      "-- Không dùng --",
+    ],
+  },
+  ph_sensor: {
+    label: "Cảm biến pH",
+    defaultName: "Cảm biến pH",
+    codeBase: "ph_sensor_main",
+    description:
+      "Đọc tín hiệu pH qua chân analog/ADC. Nên chọn chân ADC phù hợp trên ESP32.",
+    pinLabels: ["Chân analog/ADC của cảm biến pH", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân analog/ADC --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  turbidity_sensor: {
+    label: "Cảm biến độ đục nước",
+    defaultName: "Cảm biến độ đục nước",
+    codeBase: "turbidity_main",
+    description:
+      "Đọc độ đục nước qua chân analog/ADC. Nên chọn chân ADC phù hợp trên ESP32.",
+    pinLabels: ["Chân analog/ADC của cảm biến độ đục", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân analog/ADC --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  dht22: {
+    label: "Cảm biến nhiệt độ/độ ẩm DHT22",
+    defaultName: "Cảm biến DHT22",
+    codeBase: "dht22_main",
+    description:
+      "Đo nhiệt độ/độ ẩm không khí bằng DHT22. User chỉ cần chọn chân DATA.",
+    pinLabels: ["Chân DATA của DHT22", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân DATA --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  analog_sensor: {
+    label: "Cảm biến analog",
+    defaultName: "Cảm biến analog",
+    codeBase: "analog_sensor_main",
+    description: "Cảm biến đọc tín hiệu analog qua chân ADC.",
+    pinLabels: ["Chân analog/ADC", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân analog/ADC --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  light: {
+    label: "Đèn hồ cá",
+    defaultName: "Đèn hồ cá",
+    codeBase: "light_main",
+    description:
+      "Điều khiển đèn ON/OFF bằng GPIO qua relay hoặc MOSFET.",
+    pinLabels: ["Chân điều khiển đèn", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân điều khiển đèn --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  servo_feeder: {
+    label: "Servo cho ăn",
+    defaultName: "Servo cho ăn",
+    codeBase: "servo_feeder_main",
+    description:
+      "Điều khiển servo cho ăn bằng tín hiệu PWM. User chỉ cần chọn chân tín hiệu servo.",
+    pinLabels: ["Chân tín hiệu PWM servo", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân PWM servo --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  pump: {
+    label: "Máy bơm",
+    defaultName: "Máy bơm",
+    codeBase: "pump_main",
+    description:
+      "Điều khiển máy bơm ON/OFF qua relay hoặc MOSFET.",
+    pinLabels: ["Chân điều khiển máy bơm", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân điều khiển máy bơm --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  oxygen: {
+    label: "Sủi oxy",
+    defaultName: "Sủi oxy",
+    codeBase: "oxygen_main",
+    description:
+      "Điều khiển sủi oxy ON/OFF qua relay hoặc MOSFET.",
+    pinLabels: ["Chân điều khiển sủi oxy", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân điều khiển sủi oxy --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  buzzer: {
+    label: "Còi cảnh báo",
+    defaultName: "Còi cảnh báo",
+    codeBase: "buzzer_main",
+    description: "Điều khiển còi cảnh báo bằng GPIO.",
+    pinLabels: ["Chân điều khiển còi", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân điều khiển còi --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+  relay: {
+    label: "Relay",
+    defaultName: "Relay",
+    codeBase: "relay_main",
+    description: "Điều khiển relay ON/OFF bằng GPIO.",
+    pinLabels: ["Chân điều khiển relay", "Chân phụ 1", "Chân phụ 2"],
+    pinPlaceholders: [
+      "-- Chọn chân điều khiển relay --",
+      "-- Không dùng --",
+      "-- Không dùng --",
+    ],
+  },
+};
+
+const getModuleMeta = (moduleType: string) => {
+  return (
+    MODULE_META[moduleType] || {
+      label: moduleType,
+      defaultName: moduleType,
+      codeBase: `${moduleType}_main`,
+      description: "",
+      pinLabels: ["Chân điều khiển", "Chân phụ 1", "Chân phụ 2"] as [
+        string,
+        string,
+        string
+      ],
+      pinPlaceholders: [
+        "-- Chọn GPIO --",
+        "-- Không dùng --",
+        "-- Không dùng --",
+      ] as [string, string, string],
+    }
+  );
+};
+
+const getRequiredPinCount = (moduleType: string) => {
+  switch (moduleType) {
+    case "hc_sr04":
+      return 2;
+    default:
+      return 1;
+  }
+};
+
+const getPinSuggestionText = (moduleType: string, freePins: number[] = []) => {
+  const meta = getModuleMeta(moduleType);
+  const requiredCount = getRequiredPinCount(moduleType);
+  const suggestedPins = freePins.slice(0, requiredCount);
+
+  if (suggestedPins.length < requiredCount) {
+    return `Không đủ GPIO trống cho ${meta.label}. Hãy xóa hoặc chuyển module khác sang chân khác.`;
+  }
+
+  if (moduleType === "hc_sr04") {
+    return `Gợi ý đấu HC-SR04: TRIG dùng GPIO ${suggestedPins[0]}, ECHO dùng GPIO ${suggestedPins[1]}. Lưu ý ECHO của HC-SR04 thường là 5V, cần hạ áp về 3.3V trước khi đưa vào ESP32.`;
+  }
+
+  if (moduleType === "ds18b20") {
+    return `Gợi ý đấu DS18B20: DATA dùng GPIO ${suggestedPins[0]}, VCC dùng 3V3, GND dùng GND. Nếu module DS18B20 chưa có điện trở kéo lên thì thêm 4.7kΩ giữa DATA và 3V3.`;
+  }
+
+  if (moduleType === "servo_feeder") {
+    return `Gợi ý đấu servo: dây tín hiệu servo dùng GPIO ${suggestedPins[0]}, VCC servo nên cấp nguồn 5V riêng, GND servo nối chung GND với ESP32.`;
+  }
+
+  if (moduleType === "light") {
+    return `Gợi ý đấu đèn: GPIO ${suggestedPins[0]} dùng làm chân điều khiển relay/MOSFET cho đèn.`;
+  }
+
+  if (moduleType === "oxygen") {
+    return `Gợi ý đấu sủi oxy: GPIO ${suggestedPins[0]} dùng làm chân điều khiển relay/MOSFET cho sủi oxy.`;
+  }
+
+  if (moduleType === "pump") {
+    return `Gợi ý đấu máy bơm: GPIO ${suggestedPins[0]} dùng làm chân điều khiển relay/MOSFET cho bơm.`;
+  }
+
+  return `Gợi ý: dùng GPIO ${suggestedPins[0]} cho ${meta.pinLabels[0].toLowerCase()}.`;
+};
+
+const autoPickPins = (moduleType: string, freePins: number[] = []) => {
+  const requiredCount = getRequiredPinCount(moduleType);
+  const picked = freePins.slice(0, requiredCount);
+
+  return {
+    pin: picked[0] ? String(picked[0]) : "",
+    pin2: picked[1] ? String(picked[1]) : "",
+    pin3: picked[2] ? String(picked[2]) : "",
+  };
+};
+
+const makeModuleCode = (moduleType: string, existingModules: ModuleItem[] = []) => {
+  const base = getModuleMeta(moduleType).codeBase;
+  const exists = existingModules.some((item) => item.module_code === base);
+
+  if (!exists) return base;
+
+  let index = 2;
+  let nextCode = `${base}_${index}`;
+
+  while (existingModules.some((item) => item.module_code === nextCode)) {
+    index += 1;
+    nextCode = `${base}_${index}`;
+  }
+
+  return nextCode;
+};
+
 export default function ModulesPage() {
   const API_URL = "";
 
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [selectedTankId, setSelectedTankId] = useState("");
+  const [selectedDeviceId, setSelectedDeviceId] = useState("");
+
   const [modules, setModules] = useState<ModuleItem[]>([]);
-  const [options, setOptions] = useState<Options | null>(null);
+  const [options, setOptions] = useState<ModuleOptions | null>(null);
+  const [gpioInfo, setGpioInfo] = useState<DeviceModuleResponse["gpio"] | null>(
+    null
+  );
+
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<MessageType>("idle");
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const [connectionType, setConnectionType] = useState<"gpio" | "wireless">(
+    "gpio"
+  );
+  const [ioMode, setIoMode] = useState<"input" | "output">("input");
+  const [moduleType, setModuleType] = useState("ds18b20");
+  const [moduleName, setModuleName] = useState("Cảm biến nhiệt độ nước");
+  const [moduleCode, setModuleCode] = useState("");
+  const [unit, setUnit] = useState("°C");
+
+  const [pin, setPin] = useState("");
+  const [pin2, setPin2] = useState("");
+  const [pin3, setPin3] = useState("");
+
+  const [protocol, setProtocol] = useState("esp_now");
+  const [nodeType, setNodeType] = useState("esp32_c3");
+  const [nodeCode, setNodeCode] = useState("C3_WATER_01");
+
+  const [configText, setConfigText] = useState(
+    JSON.stringify(defaultConfigByType("ds18b20"), null, 2)
+  );
+
+  const currentModuleMeta = getModuleMeta(moduleType);
+  const requiredPinCount = getRequiredPinCount(moduleType);
+  const freePins = gpioInfo?.free_pins || options?.gpio_pins || [];
 
   const getToken = () => {
     if (typeof window === "undefined") return "";
@@ -59,6 +468,48 @@ export default function ModulesPage() {
     } catch {
       return { message: text };
     }
+  };
+
+  const tankOptions = useMemo(() => {
+    const map = new Map<number, TankOption>();
+
+    for (const device of devices) {
+      const tankId = Number(device.tank_id);
+
+      if (!map.has(tankId)) {
+        map.set(tankId, {
+          id: tankId,
+          name: device.tank_name || `Bể ID ${tankId}`,
+          code: device.tank_code,
+          owner_email: device.owner_email,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.id - b.id);
+  }, [devices]);
+
+  const devicesInSelectedTank = useMemo(() => {
+    if (!selectedTankId) return [];
+    return devices.filter((device) => String(device.tank_id) === selectedTankId);
+  }, [devices, selectedTankId]);
+
+  const selectedTank = tankOptions.find(
+    (tank) => String(tank.id) === selectedTankId
+  );
+
+  const selectedDevice = devices.find(
+    (device) => String(device.id) === selectedDeviceId
+  );
+
+  const moduleTypeOptions =
+    ioMode === "input"
+      ? options?.input_module_types || []
+      : options?.output_module_types || [];
+
+  const setStatus = (type: MessageType, text: string) => {
+    setMessageType(type);
+    setMessage(text);
   };
 
   const loadOptions = async () => {
@@ -79,10 +530,10 @@ export default function ModulesPage() {
     setOptions(data);
   };
 
-  const loadModules = async () => {
+  const loadDevices = async () => {
     const token = getToken();
 
-    const res = await fetch(`${API_URL}/api/device-modules`, {
+    const res = await fetch(`${API_URL}/api/devices`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -91,21 +542,81 @@ export default function ModulesPage() {
     const data = await readJsonSafe(res);
 
     if (!res.ok) {
-      throw new Error(data.message || "Không lấy được danh sách module");
+      throw new Error(data.message || "Không lấy được danh sách thiết bị");
+    }
+
+    const list: DeviceInfo[] = data.devices || [];
+    setDevices(list);
+
+    if (list.length === 0) {
+      setSelectedTankId("");
+      setSelectedDeviceId("");
+      return;
+    }
+
+    setSelectedTankId((prevTankId) => {
+      const validTank = list.some(
+        (device) => String(device.tank_id) === String(prevTankId)
+      );
+
+      const nextTankId = validTank ? prevTankId : String(list[0].tank_id);
+
+      const devicesInTank = list.filter(
+        (device) => String(device.tank_id) === nextTankId
+      );
+
+      setSelectedDeviceId((prevDeviceId) => {
+        const validDevice = devicesInTank.some(
+          (device) => String(device.id) === String(prevDeviceId)
+        );
+
+        if (validDevice) return prevDeviceId;
+        return devicesInTank[0] ? String(devicesInTank[0].id) : "";
+      });
+
+      return nextTankId;
+    });
+  };
+
+  const loadDeviceModules = async (deviceId = selectedDeviceId) => {
+    if (!deviceId) {
+      setModules([]);
+      setGpioInfo(null);
+      return;
+    }
+
+    const token = getToken();
+
+    const res = await fetch(`${API_URL}/api/device-modules/devices/${deviceId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = (await readJsonSafe(res)) as DeviceModuleResponse;
+
+    if (!res.ok) {
+      throw new Error(data.message || "Không lấy được module của thiết bị");
     }
 
     setModules(data.modules || []);
+    setGpioInfo(data.gpio || null);
   };
 
   const loadData = async () => {
     try {
       setLoading(true);
-      setMessage("");
+      setStatus("loading", "Đang tải cấu hình module...");
 
-      await Promise.all([loadOptions(), loadModules()]);
+      await Promise.all([loadOptions(), loadDevices()]);
+
+      setStatus("idle", "");
     } catch (err) {
       console.error(err);
-      setMessage(err instanceof Error ? err.message : "Không kết nối được backend");
+      setStatus(
+        "error",
+        err instanceof Error ? err.message : "Không kết nối được backend"
+      );
     } finally {
       setLoading(false);
     }
@@ -115,13 +626,194 @@ export default function ModulesPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!selectedDeviceId) {
+      setModules([]);
+      setGpioInfo(null);
+      return;
+    }
+
+    loadDeviceModules(selectedDeviceId).catch((err) => {
+      console.error(err);
+      setModules([]);
+      setGpioInfo(null);
+      setStatus(
+        "error",
+        err instanceof Error ? err.message : "Lỗi server khi lấy module"
+      );
+    });
+  }, [selectedDeviceId]);
+
+  useEffect(() => {
+    if (!options) return;
+
+    const nextOptions =
+      ioMode === "input" ? options.input_module_types : options.output_module_types;
+
+    if (!nextOptions.includes(moduleType)) {
+      const nextType = nextOptions[0] || "";
+      const meta = getModuleMeta(nextType);
+
+      setModuleType(nextType);
+      setUnit(defaultUnitByType(nextType));
+      setConfigText(JSON.stringify(defaultConfigByType(nextType), null, 2));
+      setModuleName(meta.defaultName);
+      setModuleCode(makeModuleCode(nextType, modules));
+
+      const picked = autoPickPins(nextType, gpioInfo?.free_pins || []);
+      setPin(picked.pin);
+      setPin2(picked.pin2);
+      setPin3(picked.pin3);
+    }
+  }, [ioMode, options, modules, gpioInfo?.free_pins, moduleType]);
+
+  useEffect(() => {
+    if (!moduleType) return;
+
+    const meta = getModuleMeta(moduleType);
+    const picked = autoPickPins(moduleType, gpioInfo?.free_pins || []);
+
+    setUnit(defaultUnitByType(moduleType));
+    setConfigText(JSON.stringify(defaultConfigByType(moduleType), null, 2));
+    setModuleName(meta.defaultName);
+    setModuleCode(makeModuleCode(moduleType, modules));
+
+    if (connectionType === "gpio") {
+      setPin(picked.pin);
+      setPin2(picked.pin2);
+      setPin3(picked.pin3);
+    }
+  }, [moduleType, modules, gpioInfo?.free_pins, connectionType]);
+
+  const handleTankChange = (tankId: string) => {
+    setSelectedTankId(tankId);
+
+    const nextDevices = devices.filter(
+      (device) => String(device.tank_id) === tankId
+    );
+
+    setSelectedDeviceId(nextDevices[0] ? String(nextDevices[0].id) : "");
+  };
+
+  const createModule = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedDeviceId) {
+      setStatus("error", "Vui lòng chọn thiết bị ESP trước");
+      return;
+    }
+
+    if (!moduleName.trim()) {
+      setStatus("error", "Vui lòng nhập tên module");
+      return;
+    }
+
+    if (!moduleCode.trim()) {
+      setStatus("error", "Vui lòng nhập mã module");
+      return;
+    }
+
+    if (connectionType === "gpio" && !pin) {
+      setStatus("error", `Vui lòng chọn ${currentModuleMeta.pinLabels[0]}`);
+      return;
+    }
+
+    if (connectionType === "gpio" && requiredPinCount >= 2 && !pin2) {
+      setStatus("error", `Vui lòng chọn ${currentModuleMeta.pinLabels[1]}`);
+      return;
+    }
+
+    if (connectionType === "wireless") {
+      if (!nodeCode.trim()) {
+        setStatus("error", "Module không dây phải có node_code");
+        return;
+      }
+
+      if (!nodeType.trim()) {
+        setStatus("error", "Module không dây phải có node_type");
+        return;
+      }
+    }
+
+    let parsedConfig: any = {};
+
+    try {
+      parsedConfig = configText.trim() ? JSON.parse(configText) : {};
+    } catch {
+      setStatus("error", "config_json không đúng định dạng JSON");
+      return;
+    }
+
+    try {
+      setCreating(true);
+      setStatus("loading", "Đang tạo module...");
+
+      const token = getToken();
+
+      const body: any = {
+        device_id: Number(selectedDeviceId),
+        module_code: moduleCode.trim(),
+        name: moduleName.trim(),
+        connection_type: connectionType,
+        io_mode: ioMode,
+        module_type: moduleType,
+        unit: unit.trim() || null,
+        config_json: parsedConfig,
+        enabled: true,
+      };
+
+      if (connectionType === "gpio") {
+        body.pin = Number(pin);
+        body.pin2 = pin2 ? Number(pin2) : null;
+        body.pin3 = pin3 ? Number(pin3) : null;
+      }
+
+      if (connectionType === "wireless") {
+        body.protocol = protocol;
+        body.node_type = nodeType.trim();
+        body.node_code = nodeCode.trim();
+      }
+
+      const res = await fetch(`${API_URL}/api/device-modules`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        throw new Error(data.message || "Tạo module thất bại");
+      }
+
+      setStatus("success", "Tạo module thành công");
+      setPin("");
+      setPin2("");
+      setPin3("");
+      setModuleCode(makeModuleCode(moduleType, modules));
+
+      await loadDeviceModules(selectedDeviceId);
+    } catch (err) {
+      console.error(err);
+      setStatus(
+        "error",
+        err instanceof Error ? err.message : "Không kết nối được backend"
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const deleteModule = async (moduleId: number) => {
     const ok = window.confirm("Bạn chắc chắn muốn xóa module này?");
     if (!ok) return;
 
     try {
       setLoading(true);
-      setMessage("");
+      setStatus("loading", "Đang xóa module...");
 
       const token = getToken();
 
@@ -138,11 +830,14 @@ export default function ModulesPage() {
         throw new Error(data.message || "Xóa module thất bại");
       }
 
-      setMessage("Xóa module thành công");
-      await loadModules();
+      setStatus("success", "Xóa module thành công");
+      await loadDeviceModules(selectedDeviceId);
     } catch (err) {
       console.error(err);
-      setMessage(err instanceof Error ? err.message : "Không kết nối được backend");
+      setStatus(
+        "error",
+        err instanceof Error ? err.message : "Không kết nối được backend"
+      );
     } finally {
       setLoading(false);
     }
@@ -160,35 +855,59 @@ export default function ModulesPage() {
     return value;
   };
 
+  const cardStyle = {
+    border: "1px solid #67e8f9",
+    padding: 18,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.92)",
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #67e8f9",
+    background: "#fff",
+    marginTop: 6,
+  };
+
+  const statusStyle = {
+    marginTop: 12,
+    color:
+      messageType === "success"
+        ? "#16a34a"
+        : messageType === "error"
+        ? "#dc2626"
+        : messageType === "loading"
+        ? "#d97706"
+        : "#475569",
+    fontWeight: "bold",
+  };
+
   return (
-    <main style={{ padding: 24, maxWidth: 1200 }}>
+    <main style={{ padding: 24, maxWidth: 1250 }}>
       <h1>Cấu hình module</h1>
 
       <p style={{ color: "#475569" }}>
-        Quản lý module có dây GPIO và module không dây cho thiết bị ESP.
+        Chọn bể cá, chọn thiết bị ESP, sau đó cấu hình module có dây GPIO hoặc
+        module không dây.
       </p>
 
-      <section
-        style={{
-          border: "1px solid #67e8f9",
-          padding: 18,
-          borderRadius: 18,
-          marginBottom: 24,
-          background: "rgba(255,255,255,0.92)",
-        }}
-      >
+      <section style={{ ...cardStyle, marginBottom: 24 }}>
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             gap: 12,
             alignItems: "center",
+            marginBottom: 14,
           }}
         >
           <div>
-            <h2 style={{ margin: 0 }}>Tổng quan module</h2>
+            <h2 style={{ margin: 0 }}>Chọn phạm vi cấu hình</h2>
             <p style={{ margin: "6px 0 0", color: "#475569" }}>
-              Đã cấu hình <b>{modules.length}</b> module.
+              Đã tải <b>{devices.length}</b> thiết bị, đang cấu hình{" "}
+              <b>{modules.length}</b> module cho thiết bị đang chọn.
             </p>
           </div>
 
@@ -209,30 +928,85 @@ export default function ModulesPage() {
           </button>
         </div>
 
-        {message && (
-          <p
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(220px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <label>
+            <b>Chọn bể cá</b>
+            <select
+              value={selectedTankId}
+              onChange={(e) => handleTankChange(e.target.value)}
+              style={inputStyle}
+            >
+              {tankOptions.length === 0 && (
+                <option value="">-- Chưa có bể/thiết bị --</option>
+              )}
+
+              {tankOptions.map((tank) => (
+                <option key={tank.id} value={tank.id}>
+                  ID {tank.id} - {tank.name}
+                  {tank.code ? ` - ${tank.code}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <b>Chọn thiết bị ESP</b>
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              style={inputStyle}
+            >
+              {devicesInSelectedTank.length === 0 && (
+                <option value="">-- Bể này chưa có thiết bị --</option>
+              )}
+
+              {devicesInSelectedTank.map((device) => (
+                <option key={device.id} value={device.id}>
+                  ID {device.id} - {device.name} - {device.device_code}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {selectedTank && (
+          <div
             style={{
               marginTop: 12,
-              color:
-                message.includes("thành công") || message.includes("OK")
-                  ? "#16a34a"
-                  : "#dc2626",
-              fontWeight: "bold",
+              padding: 12,
+              borderRadius: 14,
+              background: "#ecfeff",
+              border: "1px solid #67e8f9",
+              color: "#475569",
             }}
           >
-            {message}
-          </p>
+            <b>Bể đang chọn:</b> {selectedTank.name}
+            {selectedTank.code ? ` (${selectedTank.code})` : ""} |{" "}
+            <b>Số thiết bị trong bể:</b> {devicesInSelectedTank.length}
+            {selectedTank.owner_email && (
+              <>
+                {" "}
+                | <b>Owner:</b> {selectedTank.owner_email}
+              </>
+            )}
+          </div>
         )}
+
+        {message && <p style={statusStyle}>{message}</p>}
       </section>
 
       {options && (
         <section
           style={{
-            border: "1px solid #cbd5e1",
-            padding: 18,
-            borderRadius: 18,
+            ...cardStyle,
             marginBottom: 24,
-            background: "#fff",
+            border: "1px solid #cbd5e1",
           }}
         >
           <h2>Option hệ thống</h2>
@@ -267,17 +1041,410 @@ export default function ModulesPage() {
         </section>
       )}
 
-      <section
-        style={{
-          border: "1px solid #67e8f9",
-          padding: 18,
-          borderRadius: 18,
-          background: "rgba(255,255,255,0.92)",
-        }}
-      >
-        <h2>Danh sách module</h2>
+      {selectedDevice && (
+        <section style={{ ...cardStyle, marginBottom: 24 }}>
+          <h2>GPIO của thiết bị đang chọn</h2>
 
-        {modules.length === 0 && <p>Chưa có module nào.</p>}
+          <p>
+            <b>Thiết bị:</b> {selectedDevice.name} ({selectedDevice.device_code})
+          </p>
+
+          {gpioInfo ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 14,
+                  background: "#f0fdf4",
+                  border: "1px solid #86efac",
+                }}
+              >
+                <b>GPIO còn trống</b>
+                <p style={{ marginBottom: 0 }}>
+                  {gpioInfo.free_pins.length > 0
+                    ? gpioInfo.free_pins.join(", ")
+                    : "Không còn GPIO trống"}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 14,
+                  background: "#fff1f2",
+                  border: "1px solid #fecdd3",
+                }}
+              >
+                <b>GPIO đã dùng</b>
+
+                {gpioInfo.used_pins.length === 0 ? (
+                  <p style={{ marginBottom: 0 }}>Chưa có GPIO nào được dùng.</p>
+                ) : (
+                  <ul style={{ marginBottom: 0 }}>
+                    {gpioInfo.used_pins.map((item) => (
+                      <li key={`${item.module_id}_${item.pin}`}>
+                        GPIO {item.pin}: {item.module_name} ({item.module_type})
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p>Chưa tải được GPIO info.</p>
+          )}
+        </section>
+      )}
+
+      <section style={{ ...cardStyle, marginBottom: 24 }}>
+        <h2>Thêm module mới</h2>
+
+        <form onSubmit={createModule}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(220px, 1fr))",
+              gap: 12,
+            }}
+          >
+            <label>
+              <b>Kiểu kết nối</b>
+              <select
+                value={connectionType}
+                onChange={(e) =>
+                  setConnectionType(e.target.value as "gpio" | "wireless")
+                }
+                style={inputStyle}
+              >
+                <option value="gpio">Có dây / GPIO</option>
+                <option value="wireless">Không dây / Wireless</option>
+              </select>
+            </label>
+
+            <label>
+              <b>Input / Output</b>
+              <select
+                value={ioMode}
+                onChange={(e) => setIoMode(e.target.value as "input" | "output")}
+                style={inputStyle}
+              >
+                <option value="input">Input / Cảm biến</option>
+                <option value="output">Output / Chấp hành</option>
+              </select>
+            </label>
+
+            <label>
+              <b>Loại module</b>
+              <select
+                value={moduleType}
+                onChange={(e) => setModuleType(e.target.value)}
+                style={inputStyle}
+              >
+                {moduleTypeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {type} - {getModuleMeta(type).label}
+                  </option>
+                ))}
+              </select>
+
+              <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>
+                {currentModuleMeta.description}
+              </p>
+            </label>
+
+            <label>
+              <b>Tên module</b>
+              <input
+                value={moduleName}
+                onChange={(e) => setModuleName(e.target.value)}
+                style={inputStyle}
+                placeholder="Ví dụ: Cảm biến nhiệt độ nước"
+              />
+            </label>
+
+            <label>
+              <b>Mã module</b>
+              <input
+                value={moduleCode}
+                onChange={(e) => setModuleCode(e.target.value)}
+                style={inputStyle}
+                placeholder="Ví dụ: temp_ds18b20_main"
+              />
+              <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>
+                Web tự gợi ý mã kỹ thuật. Nên dùng chữ thường, không dấu, không
+                khoảng trắng.
+              </p>
+            </label>
+
+            <label>
+              <b>Đơn vị</b>
+              <input
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                style={inputStyle}
+                placeholder="Ví dụ: °C, %, pH"
+              />
+            </label>
+          </div>
+
+          {connectionType === "gpio" && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 16,
+                background: "#ecfeff",
+                border: "1px solid #67e8f9",
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>Cấu hình GPIO có dây</h3>
+
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 14,
+                  background: "#f0fdf4",
+                  border: "1px solid #86efac",
+                  color: "#166534",
+                  marginBottom: 12,
+                }}
+              >
+                <b>Gợi ý đấu dây:</b>
+
+                <p style={{ margin: "6px 0 10px" }}>
+                  {getPinSuggestionText(moduleType, gpioInfo?.free_pins || [])}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const picked = autoPickPins(
+                      moduleType,
+                      gpioInfo?.free_pins || []
+                    );
+
+                    setPin(picked.pin);
+                    setPin2(picked.pin2);
+                    setPin3(picked.pin3);
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #16a34a",
+                    background: "#16a34a",
+                    color: "#fff",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  Tự chọn GPIO phù hợp
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                <label>
+                  <b>{currentModuleMeta.pinLabels[0]}</b>
+                  <select
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="">
+                      {currentModuleMeta.pinPlaceholders[0]}
+                    </option>
+
+                    {freePins.map((gpio) => (
+                      <option key={gpio} value={gpio}>
+                        GPIO {gpio}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {requiredPinCount >= 2 && (
+                  <label>
+                    <b>{currentModuleMeta.pinLabels[1]}</b>
+                    <select
+                      value={pin2}
+                      onChange={(e) => setPin2(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">
+                        {currentModuleMeta.pinPlaceholders[1]}
+                      </option>
+
+                      {freePins
+                        .filter((gpio) => String(gpio) !== pin)
+                        .map((gpio) => (
+                          <option key={gpio} value={gpio}>
+                            GPIO {gpio}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+
+                {requiredPinCount >= 3 && (
+                  <label>
+                    <b>{currentModuleMeta.pinLabels[2]}</b>
+                    <select
+                      value={pin3}
+                      onChange={(e) => setPin3(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">
+                        {currentModuleMeta.pinPlaceholders[2]}
+                      </option>
+
+                      {freePins
+                        .filter(
+                          (gpio) =>
+                            String(gpio) !== pin && String(gpio) !== pin2
+                        )
+                        .map((gpio) => (
+                          <option key={gpio} value={gpio}>
+                            GPIO {gpio}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
+
+          {connectionType === "wireless" && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 16,
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>Cấu hình module không dây</h3>
+
+              <div
+                style={{
+                  padding: 12,
+                  borderRadius: 14,
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  marginBottom: 12,
+                }}
+              >
+                <b>Gợi ý:</b>
+                <p style={{ margin: "6px 0 0" }}>
+                  Với ESP32-C3 không dây, đặt Node code cố định như{" "}
+                  <b>C3_WATER_01</b>. Gateway ESP32 chính sẽ dùng node code này
+                  để nhận diện dữ liệu gửi về qua ESP-NOW hoặc MQTT direct.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(160px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                <label>
+                  <b>Protocol</b>
+                  <select
+                    value={protocol}
+                    onChange={(e) => setProtocol(e.target.value)}
+                    style={inputStyle}
+                  >
+                    {(options?.wireless_protocols || ["esp_now"]).map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <b>Node type</b>
+                  <input
+                    value={nodeType}
+                    onChange={(e) => setNodeType(e.target.value)}
+                    style={inputStyle}
+                    placeholder="esp32_c3"
+                  />
+                </label>
+
+                <label>
+                  <b>Node code</b>
+                  <input
+                    value={nodeCode}
+                    onChange={(e) => setNodeCode(e.target.value)}
+                    style={inputStyle}
+                    placeholder="C3_WATER_01"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 16 }}>
+            <label>
+              <b>config_json</b>
+              <textarea
+                value={configText}
+                onChange={(e) => setConfigText(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  minHeight: 150,
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                }}
+              />
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={creating || loading || !selectedDeviceId}
+            style={{
+              marginTop: 16,
+              padding: "12px 18px",
+              borderRadius: 12,
+              border: "1px solid #0891b2",
+              background:
+                creating || loading || !selectedDeviceId ? "#94a3b8" : "#0891b2",
+              color: "#fff",
+              fontWeight: "bold",
+              cursor:
+                creating || loading || !selectedDeviceId
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            {creating ? "Đang tạo..." : "Tạo module"}
+          </button>
+        </form>
+      </section>
+
+      <section style={cardStyle}>
+        <h2>Danh sách module của thiết bị đang chọn</h2>
+
+        {!selectedDeviceId && <p>Vui lòng chọn thiết bị ESP.</p>}
+
+        {selectedDeviceId && modules.length === 0 && <p>Chưa có module nào.</p>}
 
         {modules.length > 0 && (
           <div
@@ -330,16 +1497,6 @@ export default function ModulesPage() {
                 </div>
 
                 <p>
-                  <b>Thiết bị:</b> {module.device_name || module.device_id}{" "}
-                  {module.device_code ? `(${module.device_code})` : ""}
-                </p>
-
-                <p>
-                  <b>Bể:</b> {module.tank_name || module.tank_id}{" "}
-                  {module.tank_code ? `(${module.tank_code})` : ""}
-                </p>
-
-                <p>
                   <b>Kết nối:</b> {connectionLabel(module.connection_type)}
                 </p>
 
@@ -355,7 +1512,7 @@ export default function ModulesPage() {
                   <p>
                     <b>GPIO:</b>{" "}
                     {[module.pin, module.pin2, module.pin3]
-                      .filter((pin) => pin !== null && pin !== undefined)
+                      .filter((gpio) => gpio !== null && gpio !== undefined)
                       .join(", ")}
                   </p>
                 )}
@@ -383,6 +1540,7 @@ export default function ModulesPage() {
                     <summary style={{ cursor: "pointer", fontWeight: "bold" }}>
                       Xem config_json
                     </summary>
+
                     <pre
                       style={{
                         background: "#f8fafc",
