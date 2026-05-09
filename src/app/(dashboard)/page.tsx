@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 
 import {
   LineChart,
@@ -9,7 +16,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
 
@@ -31,11 +37,11 @@ type Device = {
 type SensorData = {
   id: number;
   device_id: number;
-  temperature: number;
-  ph: number;
-  water_level: number;
-  battery: number;
-  rssi: number;
+  temperature: number | null;
+  ph: number | null;
+  water_level: number | null;
+  battery: number | null;
+  rssi: number | null;
   created_at: string;
 };
 
@@ -68,8 +74,6 @@ const DEFAULT_THRESHOLD: Threshold = {
   rssi_min: -80,
 };
 
-const VI_TIME_ZONE = "Asia/Ho_Chi_Minh";
-
 const parseServerDate = (value?: string | null) => {
   if (!value) return null;
 
@@ -89,8 +93,7 @@ const parseServerDate = (value?: string | null) => {
     const parsed = new Date(normalized);
     addCandidate(parsed);
 
-    // Fix trường hợp backend/DB đã lưu giờ Việt Nam nhưng driver lại gắn Z.
-    // Nếu bị lệch 7 tiếng, bản +7h sẽ gần thời điểm hiện tại hơn.
+    // Trường hợp DB đã lưu giờ Việt Nam nhưng driver lại gắn Z.
     addCandidate(new Date(parsed.getTime() + 7 * 60 * 60 * 1000));
   } else {
     const asUtc = new Date(`${normalized}Z`);
@@ -133,6 +136,105 @@ const formatServerTime = (value?: string | null) => {
   });
 };
 
+const isNumber = (value: unknown): value is number => {
+  return typeof value === "number" && Number.isFinite(value);
+};
+
+const formatMetric = (
+  value: number | null | undefined,
+  suffix = "",
+  digits = 1
+) => {
+  if (!isNumber(value)) return "N/A";
+  return `${Number(value).toFixed(digits)}${suffix}`;
+};
+
+async function readJsonSafe(res: Response) {
+  const text = await res.text();
+
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      message: text,
+    };
+  }
+}
+
+function ChartContainer({ children }: { children: ReactElement }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+
+  useEffect(() => {
+    let frame = 0;
+
+    const measure = () => {
+      frame = window.requestAnimationFrame(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        const nextWidth = Math.floor(rect.width);
+
+        if (nextWidth > 20) {
+          setChartWidth(nextWidth);
+        }
+      });
+    };
+
+    measure();
+
+    const observer = new ResizeObserver(measure);
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    window.addEventListener("resize", measure);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: "100%",
+        minWidth: 0,
+        height: 290,
+        minHeight: 290,
+      }}
+    >
+      {chartWidth > 20 && isValidElement(children) ? (
+        cloneElement(children, {
+          width: chartWidth,
+          height: 290,
+        })
+      ) : (
+        <div
+          style={{
+            height: 290,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#64748b",
+            background: "#f8fafc",
+            borderRadius: 12,
+          }}
+        >
+          Đang tải biểu đồ...
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const API_URL = "";
 
@@ -158,39 +260,48 @@ export default function DashboardPage() {
     const t = activeThreshold;
     const alerts: string[] = [];
 
-    if (sensorData.temperature > t.temperature_max) {
+    if (
+      isNumber(sensorData.temperature) &&
+      sensorData.temperature > t.temperature_max
+    ) {
       alerts.push(
         `Nhiệt độ nước quá cao: ${sensorData.temperature}°C, vượt ngưỡng ${t.temperature_max}°C.`
       );
     }
 
-    if (sensorData.temperature < t.temperature_min) {
+    if (
+      isNumber(sensorData.temperature) &&
+      sensorData.temperature < t.temperature_min
+    ) {
       alerts.push(
         `Nhiệt độ nước quá thấp: ${sensorData.temperature}°C, thấp hơn ngưỡng ${t.temperature_min}°C.`
       );
     }
 
-    if (sensorData.ph < t.ph_min) {
+    if (isNumber(sensorData.ph) && sensorData.ph < t.ph_min) {
       alerts.push(`pH thấp: ${sensorData.ph}, thấp hơn ngưỡng ${t.ph_min}.`);
     }
 
-    if (sensorData.ph > t.ph_max) {
+    if (isNumber(sensorData.ph) && sensorData.ph > t.ph_max) {
       alerts.push(`pH cao: ${sensorData.ph}, vượt ngưỡng ${t.ph_max}.`);
     }
 
-    if (sensorData.water_level < t.water_level_min) {
+    if (
+      isNumber(sensorData.water_level) &&
+      sensorData.water_level < t.water_level_min
+    ) {
       alerts.push(
         `Mực nước thấp: ${sensorData.water_level}%, thấp hơn ngưỡng ${t.water_level_min}%.`
       );
     }
 
-    if (sensorData.battery < t.battery_min) {
+    if (isNumber(sensorData.battery) && sensorData.battery < t.battery_min) {
       alerts.push(
         `Pin thiết bị yếu: ${sensorData.battery}%, thấp hơn ngưỡng ${t.battery_min}%.`
       );
     }
 
-    if (sensorData.rssi < t.rssi_min) {
+    if (isNumber(sensorData.rssi) && sensorData.rssi < t.rssi_min) {
       alerts.push(
         `Tín hiệu WiFi yếu: ${sensorData.rssi} dBm, thấp hơn ngưỡng ${t.rssi_min} dBm.`
       );
@@ -209,7 +320,7 @@ export default function DashboardPage() {
         },
       });
 
-      const data = await res.json();
+      const data = await readJsonSafe(res);
 
       if (!res.ok) {
         setMessage(data.message || "Không lấy được danh sách thiết bị");
@@ -219,9 +330,18 @@ export default function DashboardPage() {
       const list: Device[] = data.devices || [];
       setDevices(list);
 
-      if (list.length > 0) {
-        setSelectedDeviceId((prev) => prev || String(list[0].id));
-      }
+      setSelectedDeviceId((prev) => {
+        if (list.length === 0) {
+          setSensorData(null);
+          setHistoryData([]);
+          setPlanMeta(null);
+          setThreshold(null);
+          return "";
+        }
+
+        const stillExists = list.some((device) => String(device.id) === prev);
+        return stillExists ? prev : String(list[0].id);
+      });
     } catch (err) {
       console.error(err);
       setMessage("Không kết nối được backend");
@@ -230,7 +350,10 @@ export default function DashboardPage() {
 
   const loadLatestSensor = async (deviceId: string) => {
     try {
-      if (!deviceId) return;
+      if (!deviceId) {
+        setSensorData(null);
+        return;
+      }
 
       const token = getToken();
 
@@ -243,25 +366,31 @@ export default function DashboardPage() {
         }
       );
 
-      const data = await res.json();
+      const data = await readJsonSafe(res);
 
       if (!res.ok) {
+        setSensorData(null);
         setMessage(data.message || "Không lấy được dữ liệu cảm biến");
         return;
       }
 
-      setSensorData(data.data);
+      setSensorData(data.data || null);
       setMessage("");
       setLastUpdate(new Date().toLocaleString("vi-VN", { hour12: false }));
     } catch (err) {
       console.error(err);
+      setSensorData(null);
       setMessage("Không kết nối được backend");
     }
   };
 
   const loadSensorHistory = async (deviceId: string) => {
     try {
-      if (!deviceId) return;
+      if (!deviceId) {
+        setHistoryData([]);
+        setPlanMeta(null);
+        return;
+      }
 
       const token = getToken();
 
@@ -274,9 +403,10 @@ export default function DashboardPage() {
         }
       );
 
-      const data = await res.json();
+      const data = await readJsonSafe(res);
 
       if (!res.ok) {
+        setHistoryData([]);
         setMessage(data.message || "Không lấy được lịch sử cảm biến");
         return;
       }
@@ -296,13 +426,17 @@ export default function DashboardPage() {
       setHistoryData(formatted);
     } catch (err) {
       console.error(err);
+      setHistoryData([]);
       setMessage("Không kết nối được backend");
     }
   };
 
   const loadThresholdByTank = async (tankId: number) => {
     try {
-      if (!tankId) return;
+      if (!tankId) {
+        setThreshold(null);
+        return;
+      }
 
       const token = getToken();
 
@@ -312,7 +446,7 @@ export default function DashboardPage() {
         },
       });
 
-      const data = await res.json();
+      const data = await readJsonSafe(res);
 
       if (!res.ok) {
         console.warn("Không lấy được ngưỡng:", data.message);
@@ -332,7 +466,13 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedDeviceId) return;
+    if (!selectedDeviceId) {
+      setSensorData(null);
+      setHistoryData([]);
+      setPlanMeta(null);
+      setThreshold(null);
+      return;
+    }
 
     const selected = devices.find(
       (device) => String(device.id) === selectedDeviceId
@@ -340,6 +480,8 @@ export default function DashboardPage() {
 
     if (selected?.tank_id) {
       loadThresholdByTank(selected.tank_id);
+    } else {
+      setThreshold(null);
     }
 
     loadLatestSensor(selectedDeviceId);
@@ -549,544 +691,542 @@ export default function DashboardPage() {
     </div>
   );
 
+  const renderEmptyState = () => (
+    <section
+      style={{
+        border: "1px solid #cbd5e1",
+        padding: 24,
+        borderRadius: 18,
+        background: "#fff",
+        textAlign: "center",
+        color: "#475569",
+      }}
+    >
+      <h2>Chưa có thiết bị để hiển thị</h2>
+      <p>
+        Bạn có thể tạo bể cá và thêm thiết bị ESP32 trước, sau đó Dashboard sẽ
+        hiển thị dữ liệu cảm biến tại đây.
+      </p>
+    </section>
+  );
+
   return (
     <main style={{ padding: 24, maxWidth: 1200 }}>
       <h1>Dashboard</h1>
       <p>Giám sát dữ liệu cảm biến theo thời gian thực.</p>
 
-      <section
-        style={{
-          border: "1px solid #67e8f9",
-          padding: 16,
-          borderRadius: 18,
-          marginBottom: 24,
-          background: "rgba(255,255,255,0.9)",
-        }}
-      >
-        <h2>Chọn thiết bị</h2>
+      {devices.length === 0 && renderEmptyState()}
 
-        <select
-          value={selectedDeviceId}
-          onChange={(e) => setSelectedDeviceId(e.target.value)}
-          style={{ width: "100%", padding: 8, marginBottom: 12 }}
-        >
-          <option value="">-- Chọn thiết bị --</option>
+      {devices.length > 0 && (
+        <>
+          <section
+            style={{
+              border: "1px solid #67e8f9",
+              padding: 16,
+              borderRadius: 18,
+              marginBottom: 24,
+              background: "rgba(255,255,255,0.9)",
+            }}
+          >
+            <h2>Chọn thiết bị</h2>
 
-          {devices.map((device) => (
-            <option key={device.id} value={device.id}>
-              ID {device.id} - {device.name} - Bể {device.tank_id}
-            </option>
-          ))}
-        </select>
-
-        {selectedDevice && (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                padding: 14,
-                borderRadius: 16,
-                border: `1.5px solid ${deviceConnection.border}`,
-                background: deviceConnection.background,
-                marginBottom: 16,
-              }}
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              style={{ width: "100%", padding: 8, marginBottom: 12 }}
             >
+              <option value="">-- Chọn thiết bị --</option>
+
+              {devices.map((device) => (
+                <option key={device.id} value={device.id}>
+                  ID {device.id} - {device.name} - Bể {device.tank_id}
+                </option>
+              ))}
+            </select>
+
+            {selectedDevice && (
               <div>
-                <p
+                <div
                   style={{
-                    margin: 0,
-                    fontWeight: "bold",
-                    color: "#0f172a",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    padding: 14,
+                    borderRadius: 16,
+                    border: `1.5px solid ${deviceConnection.border}`,
+                    background: deviceConnection.background,
+                    marginBottom: 16,
                   }}
                 >
-                  Trạng thái kết nối thiết bị
-                </p>
+                  <div>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontWeight: "bold",
+                        color: "#0f172a",
+                      }}
+                    >
+                      Trạng thái kết nối thiết bị
+                    </p>
 
-                <p style={{ margin: "6px 0 0", color: "#334155" }}>
-                  {deviceConnection.description}
-                </p>
+                    <p style={{ margin: "6px 0 0", color: "#334155" }}>
+                      {deviceConnection.description}
+                    </p>
 
-                {deviceConnection.lastSeenText && (
-                  <p
+                    {deviceConnection.lastSeenText && (
+                      <p
+                        style={{
+                          margin: "6px 0 0",
+                          color: "#475569",
+                          fontSize: 13,
+                        }}
+                      >
+                        {deviceConnection.lastSeenText}
+                      </p>
+                    )}
+                  </div>
+
+                  <span
                     style={{
-                      margin: "6px 0 0",
-                      color: "#475569",
-                      fontSize: 13,
+                      padding: "8px 14px",
+                      borderRadius: 999,
+                      fontWeight: "bold",
+                      color: deviceConnection.color,
+                      background: "#fff",
+                      border: `1.5px solid ${deviceConnection.border}`,
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    {deviceConnection.lastSeenText}
+                    {deviceConnection.label}
+                  </span>
+                </div>
+
+                <p>
+                  <b>Thiết bị:</b> {selectedDevice.name}
+                </p>
+
+                <p>
+                  <b>Mã thiết bị:</b> {selectedDevice.device_code}
+                </p>
+
+                <p>
+                  <b>Topic MQTT test:</b> {getMqttTopic()}
+                </p>
+
+                <p>
+                  <b>Payload mẫu:</b>{" "}
+                  {`{"device_id":${selectedDevice.id},"temperature":28.5,"ph":7.2,"water_level":80,"battery":95,"rssi":-55}`}
+                </p>
+
+                <p>
+                  <b>Dashboard tự cập nhật mỗi:</b> 2 giây
+                </p>
+
+                {lastUpdate && (
+                  <p>
+                    <b>Lần cập nhật frontend:</b> {lastUpdate}
                   </p>
                 )}
               </div>
-
-              <span
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 999,
-                  fontWeight: "bold",
-                  color: deviceConnection.color,
-                  background: "#fff",
-                  border: `1.5px solid ${deviceConnection.border}`,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {deviceConnection.label}
-              </span>
-            </div>
-
-            <p>
-              <b>Thiết bị:</b> {selectedDevice.name}
-            </p>
-
-            <p>
-              <b>Mã thiết bị:</b> {selectedDevice.device_code}
-            </p>
-
-            <p>
-              <b>Topic MQTT test:</b> {getMqttTopic()}
-            </p>
-
-            <p>
-              <b>Payload mẫu:</b>{" "}
-              {`{"device_id":${selectedDevice.id},"temperature":28.5,"ph":7.2,"water_level":80,"battery":95,"rssi":-55}`}
-            </p>
-
-            <p>
-              <b>Dashboard tự cập nhật mỗi:</b> 2 giây
-            </p>
-
-            {lastUpdate && (
-              <p>
-                <b>Lần cập nhật frontend:</b> {lastUpdate}
-              </p>
             )}
-          </div>
-        )}
 
-        <button
-          onClick={() => {
-            if (selectedDevice?.tank_id) {
-              loadThresholdByTank(selectedDevice.tank_id);
-            }
+            <button
+              onClick={() => {
+                if (selectedDevice?.tank_id) {
+                  loadThresholdByTank(selectedDevice.tank_id);
+                }
 
-            loadLatestSensor(selectedDeviceId);
-            loadSensorHistory(selectedDeviceId);
-          }}
-          style={{ padding: "10px 16px" }}
-        >
-          Refresh thủ công
-        </button>
-      </section>
+                loadLatestSensor(selectedDeviceId);
+                loadSensorHistory(selectedDeviceId);
+              }}
+              style={{ padding: "10px 16px" }}
+            >
+              Refresh thủ công
+            </button>
+          </section>
 
-      <section
-        style={{
-          border: `2px solid ${getPlanColor()}`,
-          padding: 16,
-          borderRadius: 18,
-          marginBottom: 24,
-          background: "rgba(255,255,255,0.9)",
-        }}
-      >
-        <h2>Gói sử dụng</h2>
-
-        <p
-          style={{
-            fontSize: 22,
-            fontWeight: "bold",
-            color: getPlanColor(),
-            margin: "8px 0",
-          }}
-        >
-          {getPlanLabel()}
-        </p>
-
-        <p>{getPlanDescription()}</p>
-
-        {planMeta && (
-          <p>
-            <b>Số điểm lịch sử đang lấy:</b> {planMeta.limit} điểm
-          </p>
-        )}
-
-        {planMeta?.device?.owner_email && (
-          <p>
-            <b>Chủ thiết bị:</b> {planMeta.device.owner_email}
-          </p>
-        )}
-
-        {planMeta?.device?.plan_expires_at && (
-          <p>
-            <b>Hạn Premium:</b>{" "}
-            {formatServerDateTime(planMeta.device.plan_expires_at)}
-          </p>
-        )}
-      </section>
-
-      {message && <p style={{ color: "red" }}>{message}</p>}
-
-      <section
-        style={{
-          border: alerts.length > 0 ? "2px solid #dc2626" : "1px solid #86efac",
-          padding: 16,
-          borderRadius: 18,
-          marginBottom: 24,
-          background: alerts.length > 0 ? "#fff1f2" : "#f0fdf4",
-        }}
-      >
-        <h2>Cảnh báo hệ thống</h2>
-
-        {threshold ? (
-          <p style={{ color: "#475569" }}>
-            <b>Ngưỡng đang dùng:</b> nhiệt độ {threshold.temperature_min}–
-            {threshold.temperature_max}°C, pH {threshold.ph_min}–
-            {threshold.ph_max}, mực nước tối thiểu{" "}
-            {threshold.water_level_min}%, pin tối thiểu {threshold.battery_min}
-            %, RSSI tối thiểu {threshold.rssi_min} dBm.
-          </p>
-        ) : (
-          <p style={{ color: "#475569" }}>
-            Đang dùng ngưỡng mặc định: nhiệt độ 22–30°C, pH 6.5–8.0, mực nước
-            tối thiểu 50%, pin tối thiểu 20%, RSSI tối thiểu -80 dBm.
-          </p>
-        )}
-
-        {alerts.length === 0 && (
-          <p style={{ color: "green", fontWeight: "bold" }}>
-            Hệ thống đang ổn định, chưa phát hiện bất thường.
-          </p>
-        )}
-
-        {alerts.length > 0 && (
-          <ul>
-            {alerts.map((alert, index) => (
-              <li key={index} style={{ color: "red", fontWeight: "bold" }}>
-                {alert}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section>
-        <h2>Dữ liệu mới nhất</h2>
-
-        {!sensorData && (
-          <p>Chưa có dữ liệu cảm biến cho thiết bị này.</p>
-        )}
-
-        {sensorData && (
-          <div
+          <section
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(160px, 1fr))",
-              gap: 16,
+              border: `2px solid ${getPlanColor()}`,
+              padding: 16,
+              borderRadius: 18,
+              marginBottom: 24,
+              background: "rgba(255,255,255,0.9)",
             }}
           >
-            <div style={metricCardStyle}>
-              <h3>Nhiệt độ</h3>
-              <p style={{ fontSize: 28 }}>{sensorData.temperature} °C</p>
-            </div>
+            <h2>Gói sử dụng</h2>
 
-            <div style={metricCardStyle}>
-              <h3>pH</h3>
-              <p style={{ fontSize: 28 }}>{sensorData.ph}</p>
-            </div>
+            <p
+              style={{
+                fontSize: 22,
+                fontWeight: "bold",
+                color: getPlanColor(),
+                margin: "8px 0",
+              }}
+            >
+              {getPlanLabel()}
+            </p>
 
-            <div style={metricCardStyle}>
-              <h3>Mực nước</h3>
-              <p style={{ fontSize: 28 }}>{sensorData.water_level}%</p>
-            </div>
+            <p>{getPlanDescription()}</p>
 
-            <div style={metricCardStyle}>
-              <h3>Pin</h3>
-              <p style={{ fontSize: 28 }}>{sensorData.battery}%</p>
-            </div>
+            {planMeta && (
+              <p>
+                <b>Số điểm lịch sử đang lấy:</b> {planMeta.limit} điểm
+              </p>
+            )}
 
-            <div style={metricCardStyle}>
-              <h3>RSSI</h3>
-              <p style={{ fontSize: 28 }}>{sensorData.rssi} dBm</p>
-            </div>
+            {planMeta?.device?.owner_email && (
+              <p>
+                <b>Chủ thiết bị:</b> {planMeta.device.owner_email}
+              </p>
+            )}
 
-            <div style={metricCardStyle}>
-              <h3>Cập nhật lúc</h3>
-              <p>{formatServerDateTime(sensorData.created_at)}</p>
-            </div>
-          </div>
-        )}
-      </section>
+            {planMeta?.device?.plan_expires_at && (
+              <p>
+                <b>Hạn Premium:</b>{" "}
+                {formatServerDateTime(planMeta.device.plan_expires_at)}
+              </p>
+            )}
+          </section>
 
-      <section style={{ marginTop: 32 }}>
-        <h2>Biểu đồ lịch sử cảm biến</h2>
+          {message && <p style={{ color: "red" }}>{message}</p>}
 
-        {planMeta && (
-          <p>
-            Đang hiển thị <b>{historyData.length}</b> / tối đa{" "}
-            <b>{planMeta.limit}</b> điểm theo quyền gói hiện tại.
-          </p>
-        )}
+          <section
+            style={{
+              border:
+                alerts.length > 0 ? "2px solid #dc2626" : "1px solid #86efac",
+              padding: 16,
+              borderRadius: 18,
+              marginBottom: 24,
+              background: alerts.length > 0 ? "#fff1f2" : "#f0fdf4",
+            }}
+          >
+            <h2>Cảnh báo hệ thống</h2>
 
-        {renderThresholdLegend()}
+            {threshold ? (
+              <p style={{ color: "#475569" }}>
+                <b>Ngưỡng đang dùng:</b> nhiệt độ{" "}
+                {threshold.temperature_min}–{threshold.temperature_max}°C, pH{" "}
+                {threshold.ph_min}–{threshold.ph_max}, mực nước tối thiểu{" "}
+                {threshold.water_level_min}%, pin tối thiểu{" "}
+                {threshold.battery_min}%, RSSI tối thiểu {threshold.rssi_min}{" "}
+                dBm.
+              </p>
+            ) : (
+              <p style={{ color: "#475569" }}>
+                Đang dùng ngưỡng mặc định: nhiệt độ 22–30°C, pH 6.5–8.0,
+                mực nước tối thiểu 50%, pin tối thiểu 20%, RSSI tối thiểu -80
+                dBm.
+              </p>
+            )}
 
-        {historyData.length === 0 && <p>Chưa có dữ liệu lịch sử.</p>}
+            {alerts.length === 0 && (
+              <p style={{ color: "green", fontWeight: "bold" }}>
+                Hệ thống đang ổn định, chưa phát hiện bất thường.
+              </p>
+            )}
 
-        {historyData.length > 0 && (
-          <>
-            <div style={chartCardStyle}>
-              <h3>Nhiệt độ theo thời gian</h3>
+            {alerts.length > 0 && (
+              <ul>
+                {alerts.map((alert, index) => (
+                  <li key={index} style={{ color: "red", fontWeight: "bold" }}>
+                    {alert}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
+          <section>
+            <h2>Dữ liệu mới nhất</h2>
+
+            {!sensorData && (
+              <p>Chưa có dữ liệu cảm biến cho thiết bị này.</p>
+            )}
+
+            {sensorData && (
               <div
                 style={{
-                  width: "100%",
-                  minWidth: 0,
-                  height: 290,
-                  minHeight: 290,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(160px, 1fr))",
+                  gap: 16,
                 }}
               >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
+                <div style={metricCardStyle}>
+                  <h3>Nhiệt độ</h3>
+                  <p style={{ fontSize: 28 }}>
+                    {formatMetric(sensorData.temperature, " °C", 2)}
+                  </p>
+                </div>
 
-                    <ReferenceLine
-                      y={activeThreshold.temperature_min}
-                      stroke="#2563eb"
-                      strokeDasharray="6 6"
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `Min ${activeThreshold.temperature_min}°C`,
-                        position: "insideTopLeft",
-                        fill: "#2563eb",
-                        fontSize: 12,
-                      }}
-                    />
+                <div style={metricCardStyle}>
+                  <h3>pH</h3>
+                  <p style={{ fontSize: 28 }}>
+                    {formatMetric(sensorData.ph, "", 1)}
+                  </p>
+                </div>
 
-                    <ReferenceLine
-                      y={activeThreshold.temperature_max}
-                      stroke="#dc2626"
-                      strokeDasharray="6 6"
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `Max ${activeThreshold.temperature_max}°C`,
-                        position: "insideTopLeft",
-                        fill: "#dc2626",
-                        fontSize: 12,
-                      }}
-                    />
+                <div style={metricCardStyle}>
+                  <h3>Mực nước</h3>
+                  <p style={{ fontSize: 28 }}>
+                    {formatMetric(sensorData.water_level, "%", 0)}
+                  </p>
+                </div>
 
-                    <Line
-                      type="monotone"
-                      dataKey="temperature"
-                      name="Nhiệt độ"
-                      stroke="#0891b2"
-                      strokeWidth={2.4}
-                      dot={{ r: 3 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div style={metricCardStyle}>
+                  <h3>Pin</h3>
+                  <p style={{ fontSize: 28 }}>
+                    {formatMetric(sensorData.battery, "%", 0)}
+                  </p>
+                </div>
+
+                <div style={metricCardStyle}>
+                  <h3>RSSI</h3>
+                  <p style={{ fontSize: 28 }}>
+                    {formatMetric(sensorData.rssi, " dBm", 0)}
+                  </p>
+                </div>
+
+                <div style={metricCardStyle}>
+                  <h3>Cập nhật lúc</h3>
+                  <p>{formatServerDateTime(sensorData.created_at)}</p>
+                </div>
               </div>
-            </div>
+            )}
+          </section>
 
-            <div style={chartCardStyle}>
-              <h3>pH theo thời gian</h3>
+          <section style={{ marginTop: 32 }}>
+            <h2>Biểu đồ lịch sử cảm biến</h2>
 
-              <div
-                style={{
-                  width: "100%",
-                  minWidth: 0,
-                  height: 290,
-                  minHeight: 290,
-                }}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[0, 14]} />
-                    <Tooltip />
+            {planMeta && (
+              <p>
+                Đang hiển thị <b>{historyData.length}</b> / tối đa{" "}
+                <b>{planMeta.limit}</b> điểm theo quyền gói hiện tại.
+              </p>
+            )}
 
-                    <ReferenceLine
-                      y={activeThreshold.ph_min}
-                      stroke="#2563eb"
-                      strokeDasharray="6 6"
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `pH min ${activeThreshold.ph_min}`,
-                        position: "insideTopLeft",
-                        fill: "#2563eb",
-                        fontSize: 12,
-                      }}
-                    />
+            {renderThresholdLegend()}
 
-                    <ReferenceLine
-                      y={activeThreshold.ph_max}
-                      stroke="#dc2626"
-                      strokeDasharray="6 6"
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `pH max ${activeThreshold.ph_max}`,
-                        position: "insideTopLeft",
-                        fill: "#dc2626",
-                        fontSize: 12,
-                      }}
-                    />
+            {historyData.length === 0 && <p>Chưa có dữ liệu lịch sử.</p>}
 
-                    <Line
-                      type="monotone"
-                      dataKey="ph"
-                      name="pH"
-                      stroke="#0891b2"
-                      strokeWidth={2.4}
-                      dot={{ r: 3 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            {historyData.length > 0 && (
+              <>
+                <div style={chartCardStyle}>
+                  <h3>Nhiệt độ theo thời gian</h3>
 
-            <div style={chartCardStyle}>
-              <h3>Mực nước theo thời gian</h3>
+                  <ChartContainer>
+                    <LineChart data={historyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
 
-              <div
-                style={{
-                  width: "100%",
-                  minWidth: 0,
-                  height: 290,
-                  minHeight: 290,
-                }}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[0, 100]} />
-                    <Tooltip />
+                      <ReferenceLine
+                        y={activeThreshold.temperature_min}
+                        stroke="#2563eb"
+                        strokeDasharray="6 6"
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `Min ${activeThreshold.temperature_min}°C`,
+                          position: "insideTopLeft",
+                          fill: "#2563eb",
+                          fontSize: 12,
+                        }}
+                      />
 
-                    <ReferenceLine
-                      y={activeThreshold.water_level_min}
-                      stroke="#dc2626"
-                      strokeDasharray="6 6"
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `Min ${activeThreshold.water_level_min}%`,
-                        position: "insideTopLeft",
-                        fill: "#dc2626",
-                        fontSize: 12,
-                      }}
-                    />
+                      <ReferenceLine
+                        y={activeThreshold.temperature_max}
+                        stroke="#dc2626"
+                        strokeDasharray="6 6"
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `Max ${activeThreshold.temperature_max}°C`,
+                          position: "insideTopLeft",
+                          fill: "#dc2626",
+                          fontSize: 12,
+                        }}
+                      />
 
-                    <Line
-                      type="monotone"
-                      dataKey="water_level"
-                      name="Mực nước"
-                      stroke="#0891b2"
-                      strokeWidth={2.4}
-                      dot={{ r: 3 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+                      <Line
+                        type="monotone"
+                        dataKey="temperature"
+                        name="Nhiệt độ"
+                        stroke="#0891b2"
+                        strokeWidth={2.4}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                </div>
 
-            <div style={chartCardStyle}>
-              <h3>Pin theo thời gian</h3>
+                <div style={chartCardStyle}>
+                  <h3>pH theo thời gian</h3>
 
-              <div
-                style={{
-                  width: "100%",
-                  minWidth: 0,
-                  height: 290,
-                  minHeight: 290,
-                }}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[0, 100]} />
-                    <Tooltip />
+                  <ChartContainer>
+                    <LineChart data={historyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                      <XAxis dataKey="time" />
+                      <YAxis domain={[0, 14]} />
+                      <Tooltip />
 
-                    <ReferenceLine
-                      y={activeThreshold.battery_min}
-                      stroke="#dc2626"
-                      strokeDasharray="6 6"
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `Min ${activeThreshold.battery_min}%`,
-                        position: "insideTopLeft",
-                        fill: "#dc2626",
-                        fontSize: 12,
-                      }}
-                    />
+                      <ReferenceLine
+                        y={activeThreshold.ph_min}
+                        stroke="#2563eb"
+                        strokeDasharray="6 6"
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `pH min ${activeThreshold.ph_min}`,
+                          position: "insideTopLeft",
+                          fill: "#2563eb",
+                          fontSize: 12,
+                        }}
+                      />
 
-                    <Line
-                      type="monotone"
-                      dataKey="battery"
-                      name="Pin"
-                      stroke="#0891b2"
-                      strokeWidth={2.4}
-                      dot={{ r: 3 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+                      <ReferenceLine
+                        y={activeThreshold.ph_max}
+                        stroke="#dc2626"
+                        strokeDasharray="6 6"
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `pH max ${activeThreshold.ph_max}`,
+                          position: "insideTopLeft",
+                          fill: "#dc2626",
+                          fontSize: 12,
+                        }}
+                      />
 
-            <div style={chartCardStyle}>
-              <h3>RSSI theo thời gian</h3>
+                      <Line
+                        type="monotone"
+                        dataKey="ph"
+                        name="pH"
+                        stroke="#0891b2"
+                        strokeWidth={2.4}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                </div>
 
-              <div
-                style={{
-                  width: "100%",
-                  minWidth: 0,
-                  height: 290,
-                  minHeight: 290,
-                }}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={historyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
-                    <XAxis dataKey="time" />
-                    <YAxis />
-                    <Tooltip />
+                <div style={chartCardStyle}>
+                  <h3>Mực nước theo thời gian</h3>
 
-                    <ReferenceLine
-                      y={activeThreshold.rssi_min}
-                      stroke="#dc2626"
-                      strokeDasharray="6 6"
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `Min ${activeThreshold.rssi_min} dBm`,
-                        position: "insideTopLeft",
-                        fill: "#dc2626",
-                        fontSize: 12,
-                      }}
-                    />
+                  <ChartContainer>
+                    <LineChart data={historyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                      <XAxis dataKey="time" />
+                      <YAxis domain={[0, 100]} />
+                      <Tooltip />
 
-                    <Line
-                      type="monotone"
-                      dataKey="rssi"
-                      name="RSSI"
-                      stroke="#0891b2"
-                      strokeWidth={2.4}
-                      dot={{ r: 3 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </>
-        )}
-      </section>
+                      <ReferenceLine
+                        y={activeThreshold.water_level_min}
+                        stroke="#dc2626"
+                        strokeDasharray="6 6"
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `Min ${activeThreshold.water_level_min}%`,
+                          position: "insideTopLeft",
+                          fill: "#dc2626",
+                          fontSize: 12,
+                        }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="water_level"
+                        name="Mực nước"
+                        stroke="#0891b2"
+                        strokeWidth={2.4}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                </div>
+
+                <div style={chartCardStyle}>
+                  <h3>Pin theo thời gian</h3>
+
+                  <ChartContainer>
+                    <LineChart data={historyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                      <XAxis dataKey="time" />
+                      <YAxis domain={[0, 100]} />
+                      <Tooltip />
+
+                      <ReferenceLine
+                        y={activeThreshold.battery_min}
+                        stroke="#dc2626"
+                        strokeDasharray="6 6"
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `Min ${activeThreshold.battery_min}%`,
+                          position: "insideTopLeft",
+                          fill: "#dc2626",
+                          fontSize: 12,
+                        }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="battery"
+                        name="Pin"
+                        stroke="#0891b2"
+                        strokeWidth={2.4}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                </div>
+
+                <div style={chartCardStyle}>
+                  <h3>RSSI theo thời gian</h3>
+
+                  <ChartContainer>
+                    <LineChart data={historyData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#dbeafe" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+
+                      <ReferenceLine
+                        y={activeThreshold.rssi_min}
+                        stroke="#dc2626"
+                        strokeDasharray="6 6"
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `Min ${activeThreshold.rssi_min} dBm`,
+                          position: "insideTopLeft",
+                          fill: "#dc2626",
+                          fontSize: 12,
+                        }}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="rssi"
+                        name="RSSI"
+                        stroke="#0891b2"
+                        strokeWidth={2.4}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 6 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                </div>
+              </>
+            )}
+          </section>
+        </>
+      )}
     </main>
   );
 }
