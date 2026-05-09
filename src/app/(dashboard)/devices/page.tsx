@@ -28,6 +28,58 @@ type Device = {
   email?: string;
 };
 
+const parseServerDate = (value?: string | null) => {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+
+  const candidates: Date[] = [];
+
+  const addCandidate = (date: Date) => {
+    if (!Number.isNaN(date.getTime())) {
+      candidates.push(date);
+    }
+  };
+
+  if (hasTimezone) {
+    const parsed = new Date(normalized);
+    addCandidate(parsed);
+
+    // Fix trường hợp DB/backend trả giờ bị lệch UTC+7.
+    addCandidate(new Date(parsed.getTime() + 7 * 60 * 60 * 1000));
+  } else {
+    const asUtc = new Date(`${normalized}Z`);
+    const asLocal = new Date(normalized);
+
+    addCandidate(asUtc);
+    addCandidate(asLocal);
+    addCandidate(new Date(asUtc.getTime() + 7 * 60 * 60 * 1000));
+    addCandidate(new Date(asLocal.getTime() + 7 * 60 * 60 * 1000));
+  }
+
+  if (candidates.length === 0) return null;
+
+  const now = Date.now();
+
+  candidates.sort(
+    (a, b) => Math.abs(now - a.getTime()) - Math.abs(now - b.getTime())
+  );
+
+  return candidates[0];
+};
+
+const formatServerDateTime = (value?: string | null) => {
+  const date = parseServerDate(value);
+
+  if (!date) return "";
+
+  return date.toLocaleString("vi-VN", {
+    hour12: false,
+  });
+};
+
 export default function DevicesPage() {
   const API_URL = "";
 
@@ -85,7 +137,7 @@ export default function DevicesPage() {
 
       if (res.ok) {
         setDevices(data.devices || []);
-        setLastRefresh(new Date().toLocaleString());
+        setLastRefresh(new Date().toLocaleString("vi-VN", { hour12: false }));
       } else {
         setMessage(data.message || "Không lấy được danh sách thiết bị");
       }
@@ -180,9 +232,9 @@ export default function DevicesPage() {
       };
     }
 
-    const lastSeenTime = new Date(device.last_seen).getTime();
+    const lastSeenDate = parseServerDate(device.last_seen);
 
-    if (Number.isNaN(lastSeenTime)) {
+    if (!lastSeenDate) {
       return {
         label: "Không xác định",
         color: "#64748b",
@@ -192,8 +244,8 @@ export default function DevicesPage() {
       };
     }
 
-    const diffMs = Date.now() - lastSeenTime;
-    const diffMinutes = diffMs / 1000 / 60;
+    const diffMs = Date.now() - lastSeenDate.getTime();
+    const diffMinutes = Math.max(0, diffMs / 1000 / 60);
 
     if (diffMinutes <= 2) {
       return {
@@ -316,7 +368,7 @@ export default function DevicesPage() {
 
       <section
         style={{
-          border: "1px solid #f9a8d4",
+          border: "1px solid #67e8f9",
           padding: 18,
           borderRadius: 18,
           marginBottom: 24,
@@ -408,7 +460,7 @@ export default function DevicesPage() {
 
       <section
         style={{
-          border: "1px solid #f9a8d4",
+          border: "1px solid #67e8f9",
           padding: 18,
           borderRadius: 18,
           background: "rgba(255,255,255,0.9)",
@@ -425,7 +477,7 @@ export default function DevicesPage() {
         >
           <div>
             <h2 style={{ marginBottom: 4 }}>Danh sách thiết bị</h2>
-            <p style={{ margin: 0, color: "#8b5f73" }}>
+            <p style={{ margin: 0, color: "#475569" }}>
               Tự cập nhật mỗi 5 giây.{" "}
               {lastRefresh && <>Lần cập nhật: {lastRefresh}</>}
             </p>
@@ -479,7 +531,7 @@ export default function DevicesPage() {
                         {connection.label}
                       </span>
                       <br />
-                      <span style={{ fontSize: 12, color: "#8b5f73" }}>
+                      <span style={{ fontSize: 12, color: "#475569" }}>
                         {connection.description}
                       </span>
                     </td>
@@ -487,13 +539,13 @@ export default function DevicesPage() {
                     <td>
                       <b>ID {device.tank_id}</b>
                       <br />
-                      <span style={{ color: "#8b5f73" }}>
+                      <span style={{ color: "#475569" }}>
                         {device.tank_name || "Không rõ tên bể"}
                       </span>
                       {device.tank_code && (
                         <>
                           <br />
-                          <span style={{ fontSize: 12, color: "#b97996" }}>
+                          <span style={{ fontSize: 12, color: "#64748b" }}>
                             {device.tank_code}
                           </span>
                         </>
@@ -503,13 +555,13 @@ export default function DevicesPage() {
                     <td>
                       <b>{device.name}</b>
                       <br />
-                      <span style={{ color: "#8b5f73" }}>
+                      <span style={{ color: "#475569" }}>
                         {device.device_code}
                       </span>
                       {(device.owner_email || device.email) && (
                         <>
                           <br />
-                          <span style={{ fontSize: 12, color: "#b97996" }}>
+                          <span style={{ fontSize: 12, color: "#64748b" }}>
                             Owner: {device.owner_email || device.email}
                           </span>
                         </>
@@ -541,9 +593,7 @@ export default function DevicesPage() {
 
                     <td>
                       {device.last_seen ? (
-                        <>
-                          {new Date(device.last_seen).toLocaleString()}
-                        </>
+                        <>{formatServerDateTime(device.last_seen)}</>
                       ) : (
                         <span style={{ color: "#94a3b8" }}>
                           Chưa có dữ liệu
@@ -554,12 +604,12 @@ export default function DevicesPage() {
                     <td>
                       <code
                         style={{
-                          background: "#fdf2f8",
-                          border: "1px solid #fbcfe8",
+                          background: "#ecfeff",
+                          border: "1px solid #67e8f9",
                           padding: "6px 8px",
                           borderRadius: 10,
                           display: "inline-block",
-                          color: "#7a294f",
+                          color: "#0e7490",
                           fontSize: 12,
                         }}
                       >
