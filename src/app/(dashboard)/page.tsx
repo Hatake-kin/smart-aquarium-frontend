@@ -163,7 +163,7 @@ async function readJsonSafe(res: Response) {
   }
 }
 
-function ChartContainer({ children }: { children: ReactElement }) {
+function ChartContainer({ children }: { children: ReactElement<any> }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [chartWidth, setChartWidth] = useState(0);
 
@@ -212,10 +212,10 @@ function ChartContainer({ children }: { children: ReactElement }) {
       }}
     >
       {chartWidth > 20 && isValidElement(children) ? (
-        cloneElement(children, {
+        cloneElement(children as ReactElement<any>, {
           width: chartWidth,
           height: 290,
-        })
+        } as any)
       ) : (
         <div
           style={{
