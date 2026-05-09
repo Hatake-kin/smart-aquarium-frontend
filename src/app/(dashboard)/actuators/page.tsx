@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 
 type DeviceInfo = {
   id: number;
@@ -26,6 +27,8 @@ type ActuatorState = {
   light: boolean;
   oxygen: boolean;
   auto_mode: boolean;
+  feed?: boolean;
+  servo_angle?: number;
   last_command_by: number | null;
   last_command_at: string | null;
   created_at?: string | null;
@@ -45,11 +48,6 @@ type UserData = {
 };
 
 type MessageType = "idle" | "loading" | "success" | "error";
-
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 const parseServerDate = (value?: string | null) => {
   if (!value) return null;
@@ -238,14 +236,15 @@ export default function ActuatorsPage() {
     try {
       setLoadingDeviceId(item.device.id);
       setMessageType("loading");
-      setMessage("Đang gửi lệnh cho ăn: servo quay rồi tự trở về...");
+      setMessage("Đang gửi lệnh cho ăn tới ESP32...");
 
-      await sendControlRequest(item.device.id, { pump: true });
-      await sleep(900);
-      await sendControlRequest(item.device.id, { pump: false });
+      await sendControlRequest(item.device.id, {
+        feed: true,
+        servo_angle: 90,
+      });
 
       setMessageType("success");
-      setMessage("Đã gửi lệnh cho ăn thành công. Servo đã quay và trở về.");
+      setMessage("Đã gửi lệnh cho ăn. Servo sẽ tự quay và trở về.");
 
       await loadControls(true);
     } catch (err) {
@@ -385,7 +384,7 @@ export default function ActuatorsPage() {
     );
   };
 
-  const statusBoxStyle = {
+  const statusBoxStyle: CSSProperties = {
     marginTop: 12,
     minHeight: 42,
     padding: "10px 12px",
@@ -468,7 +467,10 @@ export default function ActuatorsPage() {
             )}
           </div>
 
-          <button onClick={() => loadControls(false)} style={{ padding: "10px 16px" }}>
+          <button
+            onClick={() => loadControls(false)}
+            style={{ padding: "10px 16px" }}
+          >
             Refresh
           </button>
         </div>

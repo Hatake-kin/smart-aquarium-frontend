@@ -48,6 +48,34 @@ type RealtimeNotification = {
   timestamp: string;
 };
 
+const getRealtimeUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+  if (envUrl) {
+    return envUrl.replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:5000";
+    }
+
+    if (
+      host.startsWith("169.254.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("10.")
+    ) {
+      return `http://${host}:5000`;
+    }
+
+    return window.location.origin;
+  }
+
+  return "http://localhost:5000";
+};
+
 export default function DashboardLayout({
   children,
 }: {
@@ -60,7 +88,9 @@ export default function DashboardLayout({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
 
-  const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
+  const [notifications, setNotifications] = useState<RealtimeNotification[]>(
+    []
+  );
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [socketStatus, setSocketStatus] = useState<"online" | "offline">(
@@ -154,17 +184,24 @@ export default function DashboardLayout({
     if (!isAuthenticated || !userData?.id) return;
 
     const token = localStorage.getItem("token") || "";
+    const realtimeUrl = getRealtimeUrl();
 
-    const socket = io({
-      path: "/realtime",
-      transports: ["polling"],
-      auth: {
-        token,
-      },
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-    });
+   const socketOptions = {
+  path: "/realtime",
+  transports: ["polling"],
+  upgrade: false,
+  auth: {
+    token,
+  },
+  reconnection: true,
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1000,
+  timeout: 10000,
+};
+
+    const socket = realtimeUrl
+      ? io(realtimeUrl, socketOptions)
+      : io(socketOptions);
 
     socket.on("connect", () => {
       setSocketStatus("online");
@@ -182,7 +219,7 @@ export default function DashboardLayout({
     });
 
     socket.on("connect_error", (err: Error) => {
-      console.error("Socket connect error:", err.message);
+      console.warn("Socket connect error:", err.message);
       setSocketStatus("offline");
     });
 
