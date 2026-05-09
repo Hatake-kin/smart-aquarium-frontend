@@ -44,6 +44,58 @@ type UserData = {
   role?: "admin" | "moderator" | "user";
 };
 
+const parseServerDate = (value?: string | null) => {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+
+  const candidates: Date[] = [];
+
+  const addCandidate = (date: Date) => {
+    if (!Number.isNaN(date.getTime())) {
+      candidates.push(date);
+    }
+  };
+
+  if (hasTimezone) {
+    const parsed = new Date(normalized);
+    addCandidate(parsed);
+
+    // Fix trường hợp DB/backend trả giờ bị lệch UTC+7.
+    addCandidate(new Date(parsed.getTime() + 7 * 60 * 60 * 1000));
+  } else {
+    const asUtc = new Date(`${normalized}Z`);
+    const asLocal = new Date(normalized);
+
+    addCandidate(asUtc);
+    addCandidate(asLocal);
+    addCandidate(new Date(asUtc.getTime() + 7 * 60 * 60 * 1000));
+    addCandidate(new Date(asLocal.getTime() + 7 * 60 * 60 * 1000));
+  }
+
+  if (candidates.length === 0) return null;
+
+  const now = Date.now();
+
+  candidates.sort(
+    (a, b) => Math.abs(now - a.getTime()) - Math.abs(now - b.getTime())
+  );
+
+  return candidates[0];
+};
+
+const formatServerDateTime = (value?: string | null) => {
+  const date = parseServerDate(value);
+
+  if (!date) return "";
+
+  return date.toLocaleString("vi-VN", {
+    hour12: false,
+  });
+};
+
 export default function ActuatorsPage() {
   const API_URL = "";
 
@@ -89,7 +141,7 @@ export default function ActuatorsPage() {
       }
 
       setControls(data.controls || []);
-      setLastRefresh(new Date().toLocaleString());
+      setLastRefresh(new Date().toLocaleString("vi-VN", { hour12: false }));
       setMessage("");
     } catch (err) {
       console.error(err);
@@ -163,9 +215,9 @@ export default function ActuatorsPage() {
       };
     }
 
-    const lastSeenTime = new Date(device.last_seen).getTime();
+    const lastSeenDate = parseServerDate(device.last_seen);
 
-    if (Number.isNaN(lastSeenTime)) {
+    if (!lastSeenDate) {
       return {
         label: "Không xác định",
         color: "#64748b",
@@ -174,7 +226,10 @@ export default function ActuatorsPage() {
       };
     }
 
-    const diffMinutes = (Date.now() - lastSeenTime) / 1000 / 60;
+    const diffMinutes = Math.max(
+      0,
+      (Date.now() - lastSeenDate.getTime()) / 1000 / 60
+    );
 
     if (diffMinutes <= 2) {
       return {
@@ -223,11 +278,11 @@ export default function ActuatorsPage() {
     padding: "10px 14px",
     borderRadius: 999,
     fontWeight: "bold",
-    border: active ? "1.5px solid #ec4899" : "1.5px solid #fbcfe8",
+    border: active ? "1.5px solid #0891b2" : "1.5px solid #67e8f9",
     background: active
-      ? "linear-gradient(135deg, #ec4899, #db2777)"
+      ? "linear-gradient(135deg, #06b6d4, #0891b2)"
       : "#ffffff",
-    color: active ? "#ffffff" : "#7a294f",
+    color: active ? "#ffffff" : "#0e7490",
     opacity: disabled ? 0.55 : 1,
     cursor: disabled ? "not-allowed" : "pointer",
   });
@@ -266,7 +321,7 @@ export default function ActuatorsPage() {
 
       <section
         style={{
-          border: "1px solid #f9a8d4",
+          border: "1px solid #67e8f9",
           padding: 18,
           borderRadius: 18,
           marginBottom: 24,
@@ -283,10 +338,11 @@ export default function ActuatorsPage() {
         >
           <div>
             <h2 style={{ marginBottom: 4 }}>Danh sách điều khiển</h2>
-            <p style={{ margin: 0, color: "#8b5f73" }}>
+            <p style={{ margin: 0, color: "#475569" }}>
               Tự cập nhật mỗi 5 giây.{" "}
               {lastRefresh && <>Lần cập nhật: {lastRefresh}</>}
             </p>
+
             {user?.role === "moderator" && (
               <p style={{ color: "#d97706", fontWeight: "bold" }}>
                 Moderator chỉ được xem, không được điều khiển thiết bị.
@@ -315,7 +371,7 @@ export default function ActuatorsPage() {
       {controls.length === 0 && (
         <section
           style={{
-            border: "1px solid #f9a8d4",
+            border: "1px solid #67e8f9",
             padding: 24,
             borderRadius: 18,
             background: "rgba(255,255,255,0.9)",
@@ -341,7 +397,7 @@ export default function ActuatorsPage() {
             <section
               key={item.device.id}
               style={{
-                border: "1px solid #f9a8d4",
+                border: "1px solid #67e8f9",
                 padding: 18,
                 borderRadius: 20,
                 background: "rgba(255,255,255,0.92)",
@@ -358,10 +414,10 @@ export default function ActuatorsPage() {
               >
                 <div>
                   <h2 style={{ margin: 0 }}>{item.device.name}</h2>
-                  <p style={{ margin: "6px 0", color: "#8b5f73" }}>
+                  <p style={{ margin: "6px 0", color: "#475569" }}>
                     {item.device.device_code}
                   </p>
-                  <p style={{ margin: 0, color: "#8b5f73" }}>
+                  <p style={{ margin: 0, color: "#475569" }}>
                     Bể: {item.device.tank_name || `ID ${item.device.tank_id}`}
                   </p>
                 </div>
@@ -379,7 +435,7 @@ export default function ActuatorsPage() {
               >
                 <div
                   style={{
-                    border: "1px solid #fbcfe8",
+                    border: "1px solid #67e8f9",
                     borderRadius: 14,
                     padding: 12,
                     background: "#fff",
@@ -397,7 +453,7 @@ export default function ActuatorsPage() {
 
                 <div
                   style={{
-                    border: "1px solid #fbcfe8",
+                    border: "1px solid #67e8f9",
                     borderRadius: 14,
                     padding: 12,
                     background: "#fff",
@@ -416,15 +472,16 @@ export default function ActuatorsPage() {
 
               <div
                 style={{
-                  border: "1px solid #fbcfe8",
+                  border: "1px solid #67e8f9",
                   borderRadius: 14,
                   padding: 12,
-                  background: "#fdf2f8",
+                  background: "#ecfeff",
                   marginBottom: 16,
                 }}
               >
                 <b>MQTT control topic</b>
                 <br />
+
                 <code
                   style={{
                     display: "inline-block",
@@ -432,16 +489,16 @@ export default function ActuatorsPage() {
                     padding: "6px 8px",
                     borderRadius: 10,
                     background: "#fff",
-                    color: "#7a294f",
-                    border: "1px solid #fbcfe8",
+                    color: "#0e7490",
+                    border: "1px solid #67e8f9",
                     fontSize: 12,
                   }}
                 >
                   {item.control_topic}
                 </code>
 
-                <p style={{ marginBottom: 0, color: "#8b5f73" }}>
-                  ESP32 subscribe topic này để nhận lệnh điều khiển relay.
+                <p style={{ marginBottom: 0, color: "#475569" }}>
+                  ESP32 subscribe topic này để nhận lệnh điều khiển.
                 </p>
               </div>
 
@@ -466,18 +523,18 @@ export default function ActuatorsPage() {
                 </p>
               )}
 
-              <div style={{ color: "#8b5f73", fontSize: 13 }}>
+              <div style={{ color: "#475569", fontSize: 13 }}>
                 <p>
                   <b>Last seen:</b>{" "}
                   {item.device.last_seen
-                    ? new Date(item.device.last_seen).toLocaleString()
+                    ? formatServerDateTime(item.device.last_seen)
                     : "Chưa có dữ liệu"}
                 </p>
 
                 <p>
                   <b>Lệnh cuối:</b>{" "}
                   {item.state?.last_command_at
-                    ? new Date(item.state.last_command_at).toLocaleString()
+                    ? formatServerDateTime(item.state.last_command_at)
                     : "Chưa có lệnh"}
                 </p>
 
