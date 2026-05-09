@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import io from "socket.io-client";
 
 type DeviceInfo = {
   id: number;
@@ -73,6 +74,46 @@ type DeviceModuleResponse = {
 };
 
 type MessageType = "idle" | "success" | "error" | "loading";
+
+type ConfigAckPayload = {
+  userId?: number;
+  tankId?: number;
+  deviceId?: number;
+  device_id?: number;
+  status?: "applied" | "error" | "ignored" | string;
+  message?: string;
+  module_count?: number | null;
+  millis?: number | null;
+  timestamp?: string;
+};
+
+const getRealtimeUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+  if (envUrl) {
+    return envUrl.replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:5000";
+    }
+
+    if (
+      host.startsWith("169.254.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("10.")
+    ) {
+      return `http://${host}:5000`;
+    }
+
+    return window.location.origin;
+  }
+
+  return "http://localhost:5000";
+};
 
 const defaultConfigByType = (moduleType: string) => {
   switch (moduleType) {
@@ -166,7 +207,7 @@ const MODULE_META: Record<
     defaultName: "Cảm biến nhiệt độ nước",
     codeBase: "temp_ds18b20_main",
     description:
-      "Đo nhiệt độ nước bằng cảm biến DS18B20. User chỉ cần chọn chân DATA.",
+      "Đo nhiệt độ nước bằng cảm biến DS18B20. Người dùng chỉ cần chọn chân DATA.",
     pinLabels: ["Chân DATA của DS18B20", "Chân phụ 1", "Chân phụ 2"],
     pinPlaceholders: [
       "-- Chọn chân DATA --",
@@ -180,7 +221,11 @@ const MODULE_META: Record<
     codeBase: "water_hcsr04_main",
     description:
       "Đo khoảng cách tới mặt nước. Cần 2 chân: TRIG để phát xung và ECHO để nhận tín hiệu.",
-    pinLabels: ["Chân TRIG của HC-SR04", "Chân ECHO của HC-SR04", "Chân phụ 2"],
+    pinLabels: [
+      "Chân TRIG của HC-SR04",
+      "Chân ECHO của HC-SR04",
+      "Chân phụ 2",
+    ],
     pinPlaceholders: [
       "-- Chọn chân TRIG --",
       "-- Chọn chân ECHO --",
@@ -193,7 +238,11 @@ const MODULE_META: Record<
     codeBase: "ph_sensor_main",
     description:
       "Đọc tín hiệu pH qua chân analog/ADC. Nên chọn chân ADC phù hợp trên ESP32.",
-    pinLabels: ["Chân analog/ADC của cảm biến pH", "Chân phụ 1", "Chân phụ 2"],
+    pinLabels: [
+      "Chân analog/ADC của cảm biến pH",
+      "Chân phụ 1",
+      "Chân phụ 2",
+    ],
     pinPlaceholders: [
       "-- Chọn chân analog/ADC --",
       "-- Không dùng --",
@@ -206,7 +255,11 @@ const MODULE_META: Record<
     codeBase: "turbidity_main",
     description:
       "Đọc độ đục nước qua chân analog/ADC. Nên chọn chân ADC phù hợp trên ESP32.",
-    pinLabels: ["Chân analog/ADC của cảm biến độ đục", "Chân phụ 1", "Chân phụ 2"],
+    pinLabels: [
+      "Chân analog/ADC của cảm biến độ đục",
+      "Chân phụ 1",
+      "Chân phụ 2",
+    ],
     pinPlaceholders: [
       "-- Chọn chân analog/ADC --",
       "-- Không dùng --",
@@ -218,7 +271,7 @@ const MODULE_META: Record<
     defaultName: "Cảm biến DHT22",
     codeBase: "dht22_main",
     description:
-      "Đo nhiệt độ/độ ẩm không khí bằng DHT22. User chỉ cần chọn chân DATA.",
+      "Đo nhiệt độ/độ ẩm không khí bằng DHT22. Người dùng chỉ cần chọn chân DATA.",
     pinLabels: ["Chân DATA của DHT22", "Chân phụ 1", "Chân phụ 2"],
     pinPlaceholders: [
       "-- Chọn chân DATA --",
@@ -242,8 +295,7 @@ const MODULE_META: Record<
     label: "Đèn hồ cá",
     defaultName: "Đèn hồ cá",
     codeBase: "light_main",
-    description:
-      "Điều khiển đèn ON/OFF bằng GPIO qua relay hoặc MOSFET.",
+    description: "Điều khiển đèn ON/OFF bằng GPIO qua relay hoặc MOSFET.",
     pinLabels: ["Chân điều khiển đèn", "Chân phụ 1", "Chân phụ 2"],
     pinPlaceholders: [
       "-- Chọn chân điều khiển đèn --",
@@ -256,7 +308,7 @@ const MODULE_META: Record<
     defaultName: "Servo cho ăn",
     codeBase: "servo_feeder_main",
     description:
-      "Điều khiển servo cho ăn bằng tín hiệu PWM. User chỉ cần chọn chân tín hiệu servo.",
+      "Điều khiển servo cho ăn bằng tín hiệu PWM. Người dùng chỉ cần chọn chân tín hiệu servo.",
     pinLabels: ["Chân tín hiệu PWM servo", "Chân phụ 1", "Chân phụ 2"],
     pinPlaceholders: [
       "-- Chọn chân PWM servo --",
@@ -268,8 +320,7 @@ const MODULE_META: Record<
     label: "Máy bơm",
     defaultName: "Máy bơm",
     codeBase: "pump_main",
-    description:
-      "Điều khiển máy bơm ON/OFF qua relay hoặc MOSFET.",
+    description: "Điều khiển máy bơm ON/OFF qua relay hoặc MOSFET.",
     pinLabels: ["Chân điều khiển máy bơm", "Chân phụ 1", "Chân phụ 2"],
     pinPlaceholders: [
       "-- Chọn chân điều khiển máy bơm --",
@@ -281,8 +332,7 @@ const MODULE_META: Record<
     label: "Sủi oxy",
     defaultName: "Sủi oxy",
     codeBase: "oxygen_main",
-    description:
-      "Điều khiển sủi oxy ON/OFF qua relay hoặc MOSFET.",
+    description: "Điều khiển sủi oxy ON/OFF qua relay hoặc MOSFET.",
     pinLabels: ["Chân điều khiển sủi oxy", "Chân phụ 1", "Chân phụ 2"],
     pinPlaceholders: [
       "-- Chọn chân điều khiển sủi oxy --",
@@ -393,7 +443,10 @@ const autoPickPins = (moduleType: string, freePins: number[] = []) => {
   };
 };
 
-const makeModuleCode = (moduleType: string, existingModules: ModuleItem[] = []) => {
+const makeModuleCode = (
+  moduleType: string,
+  existingModules: ModuleItem[] = []
+) => {
   const base = getModuleMeta(moduleType).codeBase;
   const exists = existingModules.some((item) => item.module_code === base);
 
@@ -427,6 +480,8 @@ export default function ModulesPage() {
   const [messageType, setMessageType] = useState<MessageType>("idle");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [publishingConfig, setPublishingConfig] = useState(false);
+  const [configAck, setConfigAck] = useState<ConfigAckPayload | null>(null);
 
   const [connectionType, setConnectionType] = useState<"gpio" | "wireless">(
     "gpio"
@@ -467,6 +522,18 @@ export default function ModulesPage() {
       return JSON.parse(text);
     } catch {
       return { message: text };
+    }
+  };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "Chưa có";
+
+    try {
+      return new Date(value).toLocaleString("vi-VN", {
+        hour12: false,
+      });
+    } catch {
+      return value;
     }
   };
 
@@ -587,11 +654,14 @@ export default function ModulesPage() {
 
     const token = getToken();
 
-    const res = await fetch(`${API_URL}/api/device-modules/devices/${deviceId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const res = await fetch(
+      `${API_URL}/api/device-modules/devices/${deviceId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
     const data = (await readJsonSafe(res)) as DeviceModuleResponse;
 
@@ -625,6 +695,83 @@ export default function ModulesPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedDeviceId) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    let localUser: any = null;
+
+    try {
+      const rawUser = localStorage.getItem("user");
+      localUser = rawUser ? JSON.parse(rawUser) : null;
+    } catch {
+      localUser = null;
+    }
+
+    const socket = io(getRealtimeUrl(), {
+      path: "/realtime",
+      transports: ["polling"],
+      upgrade: false,
+      auth: {
+        token,
+      },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 10000,
+    });
+
+    socket.on("connect", () => {
+      if (localUser?.id) {
+        socket.emit("join_user_room", localUser.id);
+        socket.emit("join_user", localUser.id);
+      }
+
+      if (localUser?.role === "admin" || localUser?.role === "moderator") {
+        socket.emit("join_manager_room", localUser.role);
+      }
+    });
+
+    socket.on("connect_error", (err: Error) => {
+      console.warn("Config ACK socket error:", err.message);
+    });
+
+    socket.on("config_ack", (payload: ConfigAckPayload) => {
+      const ackDeviceId = payload.deviceId ?? payload.device_id;
+
+      if (String(ackDeviceId) !== String(selectedDeviceId)) {
+        return;
+      }
+
+      const nextAck = {
+        ...payload,
+        timestamp: payload.timestamp || new Date().toISOString(),
+      };
+
+      setConfigAck(nextAck);
+
+      if (payload.status === "applied") {
+        setStatus(
+          "success",
+          `ESP đã nhận cấu hình thành công (${payload.module_count ?? "?"} module).`
+        );
+      } else {
+        setStatus(
+          "error",
+          `ESP phản hồi cấu hình: ${
+            payload.message || payload.status || "unknown"
+          }`
+        );
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [selectedDeviceId]);
 
   useEffect(() => {
     if (!selectedDeviceId) {
@@ -687,12 +834,54 @@ export default function ModulesPage() {
 
   const handleTankChange = (tankId: string) => {
     setSelectedTankId(tankId);
+    setConfigAck(null);
 
     const nextDevices = devices.filter(
       (device) => String(device.tank_id) === tankId
     );
 
     setSelectedDeviceId(nextDevices[0] ? String(nextDevices[0].id) : "");
+  };
+
+  const publishConfigToEsp = async () => {
+    if (!selectedDeviceId) {
+      setStatus("error", "Vui lòng chọn thiết bị ESP trước");
+      return;
+    }
+
+    try {
+      setPublishingConfig(true);
+      setConfigAck(null);
+      setStatus("loading", "Đang gửi cấu hình xuống ESP...");
+
+      const token = getToken();
+
+      const res = await fetch(
+        `${API_URL}/api/device-modules/devices/${selectedDeviceId}/publish-config`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        throw new Error(data.message || "Gửi cấu hình xuống ESP thất bại");
+      }
+
+      setStatus("success", "Đã gửi cấu hình xuống ESP. Đang chờ ESP xác nhận...");
+    } catch (err) {
+      console.error(err);
+      setStatus(
+        "error",
+        err instanceof Error ? err.message : "Không kết nối được backend"
+      );
+    } finally {
+      setPublishingConfig(false);
+    }
   };
 
   const createModule = async (e: React.FormEvent) => {
@@ -746,6 +935,7 @@ export default function ModulesPage() {
 
     try {
       setCreating(true);
+      setConfigAck(null);
       setStatus("loading", "Đang tạo module...");
 
       const token = getToken();
@@ -789,7 +979,7 @@ export default function ModulesPage() {
         throw new Error(data.message || "Tạo module thất bại");
       }
 
-      setStatus("success", "Tạo module thành công");
+      setStatus("success", "Tạo module thành công. Đã gửi cấu hình mới xuống ESP.");
       setPin("");
       setPin2("");
       setPin3("");
@@ -813,6 +1003,7 @@ export default function ModulesPage() {
 
     try {
       setLoading(true);
+      setConfigAck(null);
       setStatus("loading", "Đang xóa module...");
 
       const token = getToken();
@@ -830,7 +1021,7 @@ export default function ModulesPage() {
         throw new Error(data.message || "Xóa module thất bại");
       }
 
-      setStatus("success", "Xóa module thành công");
+      setStatus("success", "Xóa module thành công. Đã gửi cấu hình mới xuống ESP.");
       await loadDeviceModules(selectedDeviceId);
     } catch (err) {
       console.error(err);
@@ -959,7 +1150,10 @@ export default function ModulesPage() {
             <b>Chọn thiết bị ESP</b>
             <select
               value={selectedDeviceId}
-              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              onChange={(e) => {
+                setSelectedDeviceId(e.target.value);
+                setConfigAck(null);
+              }}
               style={inputStyle}
             >
               {devicesInSelectedTank.length === 0 && (
@@ -995,6 +1189,96 @@ export default function ModulesPage() {
                 | <b>Owner:</b> {selectedTank.owner_email}
               </>
             )}
+          </div>
+        )}
+
+        {selectedDevice && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 14,
+              borderRadius: 14,
+              background: "#f8fafc",
+              border: "1px solid #cbd5e1",
+              display: "grid",
+              gridTemplateColumns: "1fr auto",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <div>
+              <b>Đồng bộ cấu hình với ESP</b>
+
+              <p style={{ margin: "6px 0", color: "#475569" }}>
+                Gửi toàn bộ module của thiết bị đang chọn xuống ESP qua MQTT
+                topic config.
+              </p>
+
+              {configAck ? (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: 10,
+                    borderRadius: 12,
+                    background:
+                      configAck.status === "applied" ? "#f0fdf4" : "#fff1f2",
+                    border:
+                      configAck.status === "applied"
+                        ? "1px solid #86efac"
+                        : "1px solid #fecdd3",
+                    color:
+                      configAck.status === "applied" ? "#166534" : "#dc2626",
+                  }}
+                >
+                  <b>
+                    {configAck.status === "applied"
+                      ? "ESP đã nhận cấu hình"
+                      : "ESP phản hồi lỗi cấu hình"}
+                  </b>
+
+                  <p style={{ margin: "6px 0 0" }}>
+                    Trạng thái: <b>{configAck.status || "unknown"}</b> | Module
+                    đã áp dụng: <b>{configAck.module_count ?? "N/A"}</b> | Thời
+                    gian: <b>{formatDateTime(configAck.timestamp)}</b>
+                  </p>
+
+                  {configAck.message && (
+                    <p style={{ margin: "6px 0 0" }}>
+                      Message: <code>{configAck.message}</code>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p style={{ margin: "8px 0 0", color: "#64748b" }}>
+                  Chưa có ACK trong phiên này. Bấm gửi cấu hình để kiểm tra ESP
+                  đã nhận chưa.
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={publishConfigToEsp}
+              disabled={publishingConfig || loading || !selectedDeviceId}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 12,
+                border: "1px solid #0891b2",
+                background:
+                  publishingConfig || loading || !selectedDeviceId
+                    ? "#94a3b8"
+                    : "#0891b2",
+                color: "#fff",
+                fontWeight: "bold",
+                cursor:
+                  publishingConfig || loading || !selectedDeviceId
+                    ? "not-allowed"
+                    : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {publishingConfig ? "Đang gửi..." : "Gửi lại cấu hình xuống ESP"}
+            </button>
           </div>
         )}
 
