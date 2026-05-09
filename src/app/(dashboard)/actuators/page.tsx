@@ -49,6 +49,14 @@ type UserData = {
 
 type MessageType = "idle" | "loading" | "success" | "error";
 
+type TankOption = {
+  id: number;
+  name: string;
+  code?: string;
+  owner_email?: string;
+  status?: string;
+};
+
 const parseServerDate = (value?: string | null) => {
   if (!value) return null;
 
@@ -99,10 +107,26 @@ const formatServerDateTime = (value?: string | null) => {
   });
 };
 
+async function readJsonSafe(res: Response) {
+  const text = await res.text();
+
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      message: text,
+    };
+  }
+}
+
 export default function ActuatorsPage() {
   const API_URL = "";
 
   const [controls, setControls] = useState<ControlItem[]>([]);
+  const [selectedTankId, setSelectedTankId] = useState("");
+  const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [message, setMessage] = useState("Sẵn sàng điều khiển thiết bị.");
   const [messageType, setMessageType] = useState<MessageType>("idle");
   const [lastRefresh, setLastRefresh] = useState("");
@@ -127,6 +151,66 @@ export default function ActuatorsPage() {
     }
   };
 
+  const getTankOptions = (list: ControlItem[]) => {
+    const map = new Map<number, TankOption>();
+
+    for (const item of list) {
+      const tankId = Number(item.device.tank_id);
+
+      if (!map.has(tankId)) {
+        map.set(tankId, {
+          id: tankId,
+          name: item.device.tank_name || `Bể ID ${tankId}`,
+          code: item.device.tank_code,
+          owner_email: item.device.owner_email,
+          status: item.device.tank_status,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.id - b.id);
+  };
+
+  const getControlsByTank = (tankId: string, list = controls) => {
+    if (!tankId) return [];
+    return list.filter((item) => String(item.device.tank_id) === tankId);
+  };
+
+  const syncSelection = (nextControls: ControlItem[]) => {
+    const tankOptions = getTankOptions(nextControls);
+
+    if (tankOptions.length === 0) {
+      setSelectedTankId("");
+      setSelectedDeviceId("");
+      return;
+    }
+
+    setSelectedTankId((prevTankId) => {
+      const validTank =
+        prevTankId &&
+        tankOptions.some((tank) => String(tank.id) === String(prevTankId));
+
+      const nextTankId = validTank ? prevTankId : String(tankOptions[0].id);
+
+      const devicesInTank = nextControls.filter(
+        (item) => String(item.device.tank_id) === nextTankId
+      );
+
+      setSelectedDeviceId((prevDeviceId) => {
+        const validDevice =
+          prevDeviceId &&
+          devicesInTank.some(
+            (item) => String(item.device.id) === String(prevDeviceId)
+          );
+
+        if (validDevice) return prevDeviceId;
+        return devicesInTank[0] ? String(devicesInTank[0].device.id) : "";
+      });
+
+      return nextTankId;
+    });
+  };
+
   const loadControls = async (silent = true) => {
     try {
       const token = getToken();
@@ -137,7 +221,7 @@ export default function ActuatorsPage() {
         },
       });
 
-      const data = await res.json();
+      const data = await readJsonSafe(res);
 
       if (!res.ok) {
         setMessageType("error");
@@ -145,7 +229,10 @@ export default function ActuatorsPage() {
         return;
       }
 
-      setControls(data.controls || []);
+      const nextControls: ControlItem[] = data.controls || [];
+
+      setControls(nextControls);
+      syncSelection(nextControls);
       setLastRefresh(new Date().toLocaleString("vi-VN", { hour12: false }));
 
       if (!silent) {
@@ -185,7 +272,7 @@ export default function ActuatorsPage() {
       body: JSON.stringify(nextPartialState),
     });
 
-    const data = await res.json();
+    const data = await readJsonSafe(res);
 
     if (!res.ok) {
       throw new Error(data.message || "Điều khiển thiết bị thất bại");
@@ -428,12 +515,197 @@ export default function ActuatorsPage() {
       ? "⚠️"
       : "ℹ️";
 
+  const tankOptions = getTankOptions(controls);
+  const controlsInSelectedTank = getControlsByTank(selectedTankId);
+  const selectedControl =
+    controlsInSelectedTank.find(
+      (item) => String(item.device.id) === selectedDeviceId
+    ) || controlsInSelectedTank[0];
+
+  const selectedTank = tankOptions.find(
+    (tank) => String(tank.id) === selectedTankId
+  );
+
+  const handleTankChange = (tankId: string) => {
+    setSelectedTankId(tankId);
+
+    const nextDevices = getControlsByTank(tankId);
+
+    setSelectedDeviceId(nextDevices[0] ? String(nextDevices[0].device.id) : "");
+  };
+
+  const renderControlCard = (item: ControlItem) => {
+    const connection = getDeviceConnection(item.device);
+    const disabled = getDeviceControlDisabled(item);
+    const isLoading = loadingDeviceId === item.device.id;
+
+    return (
+      <section
+        key={item.device.id}
+        style={{
+          border: "1px solid #67e8f9",
+          padding: 18,
+          borderRadius: 20,
+          background: "rgba(255,255,255,0.92)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "flex-start",
+            marginBottom: 14,
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0 }}>{item.device.name}</h2>
+            <p style={{ margin: "6px 0", color: "#475569" }}>
+              {item.device.device_code}
+            </p>
+            <p style={{ margin: 0, color: "#475569" }}>
+              Bể: {item.device.tank_name || `ID ${item.device.tank_id}`}
+            </p>
+          </div>
+
+          <span style={badgeStyle(connection)}>{connection.label}</span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(140px, 1fr))",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            style={{
+              border: "1px solid #67e8f9",
+              borderRadius: 14,
+              padding: 12,
+              background: "#fff",
+            }}
+          >
+            <b>Pin</b>
+            <p style={{ margin: "6px 0 0", fontSize: 22 }}>
+              {item.device.battery_level ?? "N/A"}
+              {item.device.battery_level !== null &&
+              item.device.battery_level !== undefined
+                ? "%"
+                : ""}
+            </p>
+          </div>
+
+          <div
+            style={{
+              border: "1px solid #67e8f9",
+              borderRadius: 14,
+              padding: 12,
+              background: "#fff",
+            }}
+          >
+            <b>RSSI</b>
+            <p style={{ margin: "6px 0 0", fontSize: 22 }}>
+              {item.device.rssi ?? "N/A"}
+              {item.device.rssi !== null && item.device.rssi !== undefined
+                ? " dBm"
+                : ""}
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            border: "1px solid #67e8f9",
+            borderRadius: 14,
+            padding: 12,
+            background: "#ecfeff",
+            marginBottom: 16,
+          }}
+        >
+          <b>MQTT control topic</b>
+          <br />
+
+          <code
+            style={{
+              display: "inline-block",
+              marginTop: 8,
+              padding: "6px 8px",
+              borderRadius: 10,
+              background: "#fff",
+              color: "#0e7490",
+              border: "1px solid #67e8f9",
+              fontSize: 12,
+            }}
+          >
+            {item.control_topic}
+          </code>
+
+          <p style={{ marginBottom: 0, color: "#475569" }}>
+            ESP32 subscribe topic này để nhận lệnh điều khiển.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          <button
+            disabled={disabled || isLoading}
+            onClick={() => feedServo(item)}
+            style={feedButtonStyle(disabled || isLoading)}
+            title="Servo quay 90° rồi tự về 0°"
+          >
+            Cho ăn
+          </button>
+
+          {renderSwitch(item, "light", "Đèn")}
+          {renderSwitch(item, "oxygen", "Sủi oxy")}
+          {renderSwitch(item, "auto_mode", "Auto")}
+        </div>
+
+        {disabled && (
+          <p style={{ color: "#d97706", fontWeight: "bold" }}>
+            Thiết bị/bể đang bị khóa hoặc tài khoản không có quyền điều khiển.
+          </p>
+        )}
+
+        <div style={{ color: "#475569", fontSize: 13 }}>
+          <p>
+            <b>Last seen:</b>{" "}
+            {item.device.last_seen
+              ? formatServerDateTime(item.device.last_seen)
+              : "Chưa có dữ liệu"}
+          </p>
+
+          <p>
+            <b>Lệnh cuối:</b>{" "}
+            {item.state?.last_command_at
+              ? formatServerDateTime(item.state.last_command_at)
+              : "Chưa có lệnh"}
+          </p>
+
+          {item.device.owner_email && (
+            <p>
+              <b>Owner:</b> {item.device.owner_email}
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  };
+
   return (
     <main style={{ padding: 24, maxWidth: 1250 }}>
       <h1>Điều khiển thiết bị</h1>
       <p>
-        Điều khiển đèn, servo cho ăn, sủi oxy và chế độ tự động thông qua MQTT
-        topic điều khiển.
+        Chọn bể cá, chọn thiết bị rồi điều khiển đèn, servo cho ăn, sủi oxy và
+        chế độ tự động thông qua MQTT topic điều khiển.
       </p>
 
       <section
@@ -451,6 +723,7 @@ export default function ActuatorsPage() {
             justifyContent: "space-between",
             gap: 12,
             alignItems: "center",
+            marginBottom: 14,
           }}
         >
           <div>
@@ -475,6 +748,94 @@ export default function ActuatorsPage() {
           </button>
         </div>
 
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(220px, 1fr))",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <label>
+            <b>Chọn bể cá</b>
+            <select
+              value={selectedTankId}
+              onChange={(e) => handleTankChange(e.target.value)}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 6,
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #67e8f9",
+                background: "#fff",
+              }}
+            >
+              {tankOptions.length === 0 && (
+                <option value="">-- Chưa có bể có thiết bị --</option>
+              )}
+
+              {tankOptions.map((tank) => (
+                <option key={tank.id} value={tank.id}>
+                  ID {tank.id} - {tank.name}
+                  {tank.code ? ` - ${tank.code}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <b>Chọn thiết bị</b>
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 6,
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid #67e8f9",
+                background: "#fff",
+              }}
+            >
+              {controlsInSelectedTank.length === 0 && (
+                <option value="">-- Chưa có thiết bị điều khiển --</option>
+              )}
+
+              {controlsInSelectedTank.map((item) => (
+                <option key={item.device.id} value={item.device.id}>
+                  ID {item.device.id} - {item.device.name} -{" "}
+                  {item.device.device_code}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {selectedTank && (
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 14,
+              background: "#ecfeff",
+              border: "1px solid #67e8f9",
+              color: "#475569",
+              marginBottom: 12,
+            }}
+          >
+            <b>Bể đang chọn:</b> {selectedTank.name}
+            {selectedTank.code ? ` (${selectedTank.code})` : ""} |{" "}
+            <b>Số thiết bị điều khiển:</b> {controlsInSelectedTank.length}
+            {selectedTank.owner_email && (
+              <>
+                {" "}
+                | <b>Owner:</b> {selectedTank.owner_email}
+              </>
+            )}
+          </div>
+        )}
+
         <div style={statusBoxStyle}>
           <span>{messageIcon}</span>
           <span>{message}</span>
@@ -495,181 +856,21 @@ export default function ActuatorsPage() {
         </section>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-          gap: 18,
-        }}
-      >
-        {controls.map((item) => {
-          const connection = getDeviceConnection(item.device);
-          const disabled = getDeviceControlDisabled(item);
-          const isLoading = loadingDeviceId === item.device.id;
+      {controls.length > 0 && !selectedControl && (
+        <section
+          style={{
+            border: "1px solid #67e8f9",
+            padding: 24,
+            borderRadius: 18,
+            background: "rgba(255,255,255,0.9)",
+            textAlign: "center",
+          }}
+        >
+          Bể này chưa có thiết bị điều khiển.
+        </section>
+      )}
 
-          return (
-            <section
-              key={item.device.id}
-              style={{
-                border: "1px solid #67e8f9",
-                padding: 18,
-                borderRadius: 20,
-                background: "rgba(255,255,255,0.92)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  alignItems: "flex-start",
-                  marginBottom: 14,
-                }}
-              >
-                <div>
-                  <h2 style={{ margin: 0 }}>{item.device.name}</h2>
-                  <p style={{ margin: "6px 0", color: "#475569" }}>
-                    {item.device.device_code}
-                  </p>
-                  <p style={{ margin: 0, color: "#475569" }}>
-                    Bể: {item.device.tank_name || `ID ${item.device.tank_id}`}
-                  </p>
-                </div>
-
-                <span style={badgeStyle(connection)}>{connection.label}</span>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(140px, 1fr))",
-                  gap: 10,
-                  marginBottom: 16,
-                }}
-              >
-                <div
-                  style={{
-                    border: "1px solid #67e8f9",
-                    borderRadius: 14,
-                    padding: 12,
-                    background: "#fff",
-                  }}
-                >
-                  <b>Pin</b>
-                  <p style={{ margin: "6px 0 0", fontSize: 22 }}>
-                    {item.device.battery_level ?? "N/A"}
-                    {item.device.battery_level !== null &&
-                    item.device.battery_level !== undefined
-                      ? "%"
-                      : ""}
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    border: "1px solid #67e8f9",
-                    borderRadius: 14,
-                    padding: 12,
-                    background: "#fff",
-                  }}
-                >
-                  <b>RSSI</b>
-                  <p style={{ margin: "6px 0 0", fontSize: 22 }}>
-                    {item.device.rssi ?? "N/A"}
-                    {item.device.rssi !== null &&
-                    item.device.rssi !== undefined
-                      ? " dBm"
-                      : ""}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  border: "1px solid #67e8f9",
-                  borderRadius: 14,
-                  padding: 12,
-                  background: "#ecfeff",
-                  marginBottom: 16,
-                }}
-              >
-                <b>MQTT control topic</b>
-                <br />
-
-                <code
-                  style={{
-                    display: "inline-block",
-                    marginTop: 8,
-                    padding: "6px 8px",
-                    borderRadius: 10,
-                    background: "#fff",
-                    color: "#0e7490",
-                    border: "1px solid #67e8f9",
-                    fontSize: 12,
-                  }}
-                >
-                  {item.control_topic}
-                </code>
-
-                <p style={{ marginBottom: 0, color: "#475569" }}>
-                  ESP32 subscribe topic này để nhận lệnh điều khiển.
-                </p>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 10,
-                  marginBottom: 16,
-                }}
-              >
-                <button
-                  disabled={disabled || isLoading}
-                  onClick={() => feedServo(item)}
-                  style={feedButtonStyle(disabled || isLoading)}
-                  title="Servo quay 90° rồi tự về 0°"
-                >
-                  Cho ăn
-                </button>
-
-                {renderSwitch(item, "light", "Đèn")}
-                {renderSwitch(item, "oxygen", "Sủi oxy")}
-                {renderSwitch(item, "auto_mode", "Auto")}
-              </div>
-
-              {disabled && (
-                <p style={{ color: "#d97706", fontWeight: "bold" }}>
-                  Thiết bị/bể đang bị khóa hoặc tài khoản không có quyền điều
-                  khiển.
-                </p>
-              )}
-
-              <div style={{ color: "#475569", fontSize: 13 }}>
-                <p>
-                  <b>Last seen:</b>{" "}
-                  {item.device.last_seen
-                    ? formatServerDateTime(item.device.last_seen)
-                    : "Chưa có dữ liệu"}
-                </p>
-
-                <p>
-                  <b>Lệnh cuối:</b>{" "}
-                  {item.state?.last_command_at
-                    ? formatServerDateTime(item.state.last_command_at)
-                    : "Chưa có lệnh"}
-                </p>
-
-                {item.device.owner_email && (
-                  <p>
-                    <b>Owner:</b> {item.device.owner_email}
-                  </p>
-                )}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      {selectedControl && renderControlCard(selectedControl)}
     </main>
   );
 }
