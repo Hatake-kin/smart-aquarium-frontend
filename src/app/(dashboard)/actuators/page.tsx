@@ -44,6 +44,13 @@ type UserData = {
   role?: "admin" | "moderator" | "user";
 };
 
+type MessageType = "idle" | "loading" | "success" | "error";
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 const parseServerDate = (value?: string | null) => {
   if (!value) return null;
 
@@ -62,8 +69,6 @@ const parseServerDate = (value?: string | null) => {
   if (hasTimezone) {
     const parsed = new Date(normalized);
     addCandidate(parsed);
-
-    // Fix trường hợp DB/backend trả giờ bị lệch UTC+7.
     addCandidate(new Date(parsed.getTime() + 7 * 60 * 60 * 1000));
   } else {
     const asUtc = new Date(`${normalized}Z`);
@@ -100,7 +105,8 @@ export default function ActuatorsPage() {
   const API_URL = "";
 
   const [controls, setControls] = useState<ControlItem[]>([]);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState("Sẵn sàng điều khiển thiết bị.");
+  const [messageType, setMessageType] = useState<MessageType>("idle");
   const [lastRefresh, setLastRefresh] = useState("");
   const [loadingDeviceId, setLoadingDeviceId] = useState<number | null>(null);
   const [user, setUser] = useState<UserData | null>(null);
@@ -123,7 +129,7 @@ export default function ActuatorsPage() {
     }
   };
 
-  const loadControls = async () => {
+  const loadControls = async (silent = true) => {
     try {
       const token = getToken();
 
@@ -136,29 +142,59 @@ export default function ActuatorsPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        setMessageType("error");
         setMessage(data.message || "Không lấy được danh sách điều khiển");
         return;
       }
 
       setControls(data.controls || []);
       setLastRefresh(new Date().toLocaleString("vi-VN", { hour12: false }));
-      setMessage("");
+
+      if (!silent) {
+        setMessageType("idle");
+        setMessage("Sẵn sàng điều khiển thiết bị.");
+      }
     } catch (err) {
       console.error(err);
+      setMessageType("error");
       setMessage("Không kết nối được backend");
     }
   };
 
   useEffect(() => {
     loadUser();
-    loadControls();
+    loadControls(false);
 
     const timer = setInterval(() => {
-      loadControls();
+      loadControls(true);
     }, 5000);
 
     return () => clearInterval(timer);
   }, []);
+
+  const sendControlRequest = async (
+    deviceId: number,
+    nextPartialState: Partial<ActuatorState>
+  ) => {
+    const token = getToken();
+
+    const res = await fetch(`${API_URL}/api/actuators/devices/${deviceId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(nextPartialState),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || "Điều khiển thiết bị thất bại");
+    }
+
+    return data;
+  };
 
   const updateControl = async (
     deviceId: number,
@@ -166,34 +202,31 @@ export default function ActuatorsPage() {
   ) => {
     try {
       setLoadingDeviceId(deviceId);
-      setMessage("");
+      setMessageType("loading");
+      setMessage("Đang gửi lệnh điều khiển tới ESP32 qua MQTT...");
 
-      const token = getToken();
+      await sendControlRequest(deviceId, nextPartialState);
 
-      const res = await fetch(`${API_URL}/api/actuators/devices/${deviceId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(nextPartialState),
-      });
+      setMessageType("success");
+      setMessage("Lệnh đã gửi thành công. ESP32 đang xử lý.");
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setMessage(data.message || "Điều khiển thiết bị thất bại");
-        return;
-      }
-
-      setMessage("Điều khiển thiết bị thành công");
-      await loadControls();
+      await loadControls(true);
     } catch (err) {
       console.error(err);
-      setMessage("Không kết nối được backend");
+      setMessageType("error");
+      setMessage(
+        err instanceof Error ? err.message : "Không kết nối được backend"
+      );
     } finally {
       setLoadingDeviceId(null);
     }
+  };
+
+  const getDeviceControlDisabled = (item: ControlItem) => {
+    if (user?.role === "moderator") return true;
+    if (item.device.status === "suspended") return true;
+    if (item.device.tank_status === "suspended") return true;
+    return false;
   };
 
   const feedServo = async (item: ControlItem) => {
@@ -202,11 +235,28 @@ export default function ActuatorsPage() {
 
     if (disabled) return;
 
-    await updateControl(item.device.id, { pump: true });
+    try {
+      setLoadingDeviceId(item.device.id);
+      setMessageType("loading");
+      setMessage("Đang gửi lệnh cho ăn: servo quay rồi tự trở về...");
 
-    setTimeout(() => {
-      updateControl(item.device.id, { pump: false });
-    }, 900);
+      await sendControlRequest(item.device.id, { pump: true });
+      await sleep(900);
+      await sendControlRequest(item.device.id, { pump: false });
+
+      setMessageType("success");
+      setMessage("Đã gửi lệnh cho ăn thành công. Servo đã quay và trở về.");
+
+      await loadControls(true);
+    } catch (err) {
+      console.error(err);
+      setMessageType("error");
+      setMessage(
+        err instanceof Error ? err.message : "Không kết nối được backend"
+      );
+    } finally {
+      setLoadingDeviceId(null);
+    }
   };
 
   const getDeviceConnection = (device: DeviceInfo) => {
@@ -261,13 +311,6 @@ export default function ActuatorsPage() {
     };
   };
 
-  const getDeviceControlDisabled = (item: ControlItem) => {
-    if (user?.role === "moderator") return true;
-    if (item.device.status === "suspended") return true;
-    if (item.device.tank_status === "suspended") return true;
-    return false;
-  };
-
   const badgeStyle = (style: {
     color: string;
     background: string;
@@ -287,7 +330,7 @@ export default function ActuatorsPage() {
   });
 
   const switchButtonStyle = (active: boolean, disabled: boolean) => ({
-    minWidth: 92,
+    minWidth: 96,
     padding: "10px 14px",
     borderRadius: 999,
     fontWeight: "bold",
@@ -298,6 +341,8 @@ export default function ActuatorsPage() {
     color: active ? "#ffffff" : "#0e7490",
     opacity: disabled ? 0.55 : 1,
     cursor: disabled ? "not-allowed" : "pointer",
+    transition: "transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease",
+    boxShadow: active ? "0 8px 18px rgba(8, 145, 178, 0.18)" : "none",
   });
 
   const feedButtonStyle = (disabled: boolean) => ({
@@ -312,6 +357,8 @@ export default function ActuatorsPage() {
     color: disabled ? "#92400e" : "#ffffff",
     opacity: disabled ? 0.55 : 1,
     cursor: disabled ? "not-allowed" : "pointer",
+    transition: "transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease",
+    boxShadow: disabled ? "none" : "0 8px 18px rgba(245, 158, 11, 0.2)",
   });
 
   const renderSwitch = (
@@ -337,6 +384,50 @@ export default function ActuatorsPage() {
       </button>
     );
   };
+
+  const statusBoxStyle = {
+    marginTop: 12,
+    minHeight: 42,
+    padding: "10px 12px",
+    borderRadius: 14,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontWeight: "bold",
+    color:
+      messageType === "error"
+        ? "#dc2626"
+        : messageType === "success"
+        ? "#16a34a"
+        : messageType === "loading"
+        ? "#d97706"
+        : "#475569",
+    background:
+      messageType === "error"
+        ? "#fff1f2"
+        : messageType === "success"
+        ? "#f0fdf4"
+        : messageType === "loading"
+        ? "#fffbeb"
+        : "#f8fafc",
+    border:
+      messageType === "error"
+        ? "1px solid #fecdd3"
+        : messageType === "success"
+        ? "1px solid #86efac"
+        : messageType === "loading"
+        ? "1px solid #fde68a"
+        : "1px solid #e2e8f0",
+  };
+
+  const messageIcon =
+    messageType === "loading"
+      ? "⏳"
+      : messageType === "success"
+      ? "✅"
+      : messageType === "error"
+      ? "⚠️"
+      : "ℹ️";
 
   return (
     <main style={{ padding: 24, maxWidth: 1250 }}>
@@ -377,22 +468,15 @@ export default function ActuatorsPage() {
             )}
           </div>
 
-          <button onClick={loadControls} style={{ padding: "10px 16px" }}>
+          <button onClick={() => loadControls(false)} style={{ padding: "10px 16px" }}>
             Refresh
           </button>
         </div>
 
-        {message && (
-          <p
-            style={{
-              marginTop: 12,
-              fontWeight: "bold",
-              color: message.includes("thành công") ? "#16a34a" : "#dc2626",
-            }}
-          >
-            {message}
-          </p>
-        )}
+        <div style={statusBoxStyle}>
+          <span>{messageIcon}</span>
+          <span>{message}</span>
+        </div>
       </section>
 
       {controls.length === 0 && (
@@ -544,7 +628,7 @@ export default function ActuatorsPage() {
                   style={feedButtonStyle(disabled || isLoading)}
                   title="Servo quay 90° rồi tự về 0°"
                 >
-                  {isLoading ? "Đang gửi..." : "Cho ăn"}
+                  Cho ăn
                 </button>
 
                 {renderSwitch(item, "light", "Đèn")}
