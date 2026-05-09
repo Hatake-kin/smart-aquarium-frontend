@@ -196,6 +196,19 @@ export default function ActuatorsPage() {
     }
   };
 
+  const feedServo = async (item: ControlItem) => {
+    const disabled =
+      getDeviceControlDisabled(item) || loadingDeviceId === item.device.id;
+
+    if (disabled) return;
+
+    await updateControl(item.device.id, { pump: true });
+
+    setTimeout(() => {
+      updateControl(item.device.id, { pump: false });
+    }, 900);
+  };
+
   const getDeviceConnection = (device: DeviceInfo) => {
     if (device.status === "suspended" || device.tank_status === "suspended") {
       return {
@@ -287,9 +300,23 @@ export default function ActuatorsPage() {
     cursor: disabled ? "not-allowed" : "pointer",
   });
 
+  const feedButtonStyle = (disabled: boolean) => ({
+    minWidth: 110,
+    padding: "10px 14px",
+    borderRadius: 999,
+    fontWeight: "bold",
+    border: "1.5px solid #f59e0b",
+    background: disabled
+      ? "#ffffff"
+      : "linear-gradient(135deg, #fbbf24, #f59e0b)",
+    color: disabled ? "#92400e" : "#ffffff",
+    opacity: disabled ? 0.55 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  });
+
   const renderSwitch = (
     item: ControlItem,
-    keyName: "pump" | "light" | "oxygen" | "auto_mode",
+    keyName: "light" | "oxygen" | "auto_mode",
     label: string
   ) => {
     const active = Boolean(item.state?.[keyName]);
@@ -315,8 +342,8 @@ export default function ActuatorsPage() {
     <main style={{ padding: 24, maxWidth: 1250 }}>
       <h1>Điều khiển thiết bị</h1>
       <p>
-        Điều khiển bơm, đèn, sủi oxy và chế độ tự động thông qua MQTT topic
-        điều khiển.
+        Điều khiển đèn, servo cho ăn, sủi oxy và chế độ tự động thông qua MQTT
+        topic điều khiển.
       </p>
 
       <section
@@ -392,6 +419,7 @@ export default function ActuatorsPage() {
         {controls.map((item) => {
           const connection = getDeviceConnection(item.device);
           const disabled = getDeviceControlDisabled(item);
+          const isLoading = loadingDeviceId === item.device.id;
 
           return (
             <section
@@ -510,7 +538,15 @@ export default function ActuatorsPage() {
                   marginBottom: 16,
                 }}
               >
-                {renderSwitch(item, "pump", "Bơm")}
+                <button
+                  disabled={disabled || isLoading}
+                  onClick={() => feedServo(item)}
+                  style={feedButtonStyle(disabled || isLoading)}
+                  title="Servo quay 90° rồi tự về 0°"
+                >
+                  {isLoading ? "Đang gửi..." : "Cho ăn"}
+                </button>
+
                 {renderSwitch(item, "light", "Đèn")}
                 {renderSwitch(item, "oxygen", "Sủi oxy")}
                 {renderSwitch(item, "auto_mode", "Auto")}
