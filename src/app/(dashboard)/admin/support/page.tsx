@@ -44,6 +44,27 @@ const statusStyles: Record<string, string> = {
   rejected: "border-red-200 bg-red-50 text-red-600",
 };
 
+const getStatusButtonClass = (value: string, currentStatus: string) => {
+  const base =
+    "rounded-2xl border px-4 py-2 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60";
+
+  const activeMap: Record<string, string> = {
+    pending: "border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-100",
+    in_progress: "border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-100",
+    resolved: "border-green-600 bg-green-600 text-white shadow-md shadow-green-100",
+    rejected: "border-red-600 bg-red-600 text-white shadow-md shadow-red-100",
+  };
+
+  const inactiveMap: Record<string, string> = {
+    pending: "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100",
+    in_progress: "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100",
+    resolved: "border-green-300 bg-green-50 text-green-700 hover:bg-green-100",
+    rejected: "border-red-300 bg-red-50 text-red-600 hover:bg-red-100",
+  };
+
+  return base + " " + (value === currentStatus ? activeMap[value] : inactiveMap[value]);
+};
+
 export default function AdminSupportPage() {
   const API_URL = "";
 
@@ -303,6 +324,9 @@ export default function AdminSupportPage() {
                 <label className="mb-2 block font-bold text-pink-900">
                   Phản hồi admin
                 </label>
+                <p className="mb-2 text-xs font-semibold text-slate-500">
+                  Bấm một trạng thái bên dưới để lưu phản hồi và cập nhật cho user.
+                </p>
                 <textarea
                   value={replyDrafts[item.id] || ""}
                   onChange={(e) =>
@@ -312,7 +336,7 @@ export default function AdminSupportPage() {
                     }))
                   }
                   rows={4}
-                  className="w-full rounded-2xl border border-pink-300 px-4 py-3 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-100"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
                 />
               </div>
 
@@ -322,12 +346,7 @@ export default function AdminSupportPage() {
                     key={value}
                     onClick={() => updateRequest(item.id, value)}
                     disabled={loadingId === item.id}
-                    className={[
-                      "rounded-2xl border px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60",
-                      value === item.status
-                        ? "border-pink-500 bg-pink-600 text-white"
-                        : "border-pink-300 text-pink-700 hover:bg-pink-50",
-                    ].join(" ")}
+                    className={getStatusButtonClass(value, item.status)}
                   >
                     {loadingId === item.id ? "Đang lưu..." : label}
                   </button>

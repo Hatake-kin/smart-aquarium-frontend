@@ -285,9 +285,19 @@ export default function SupportPage() {
       </section>
 
       <section className="mt-5 rounded-3xl border border-pink-200 bg-white p-4 shadow-sm md:p-6">
-        <h2 className="mb-4 text-xl font-black text-slate-800">
-          Yêu cầu đã gửi
-        </h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-black text-slate-800">
+            Yêu cầu đã gửi
+          </h2>
+
+          <button
+            type="button"
+            onClick={loadRequests}
+            className="rounded-2xl border border-cyan-300 bg-cyan-50 px-4 py-2 text-sm font-black text-cyan-700 transition hover:bg-cyan-100"
+          >
+            Refresh phản hồi
+          </button>
+        </div>
 
         <div className="space-y-3">
           {requests.map((item) => (
