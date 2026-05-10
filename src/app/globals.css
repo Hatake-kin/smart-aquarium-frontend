@@ -564,3 +564,75 @@ button {
     overflow-x: auto;
   }
 }
+
+
+/* ===== SmartAQ mobile table and long text fix ===== */
+@media (max-width: 768px) {
+  main,
+  main * {
+    overflow-wrap: anywhere;
+  }
+
+  pre,
+  code {
+    max-width: 100%;
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  p,
+  span,
+  div,
+  td,
+  th {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  table {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  table th,
+  table td {
+    min-width: 115px;
+    max-width: 220px;
+    white-space: normal !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+
+  table th:first-child,
+  table td:first-child {
+    min-width: 70px;
+  }
+
+  table th:last-child,
+  table td:last-child {
+    min-width: 150px;
+  }
+
+  /* Cho các khối card chứa bảng không cắt mất phần scroll */
+  section,
+  article,
+  form,
+  main > div {
+    overflow-x: visible;
+  }
+
+  /* Nội dung JSON/payload dài trong dashboard không tràn khỏi card */
+  [style*="Payload"],
+  [style*="payload"] {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+}
