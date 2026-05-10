@@ -476,7 +476,7 @@ export default function DashboardLayout({
           type="button"
           aria-label="Đóng menu"
           onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-30"
+          className="fixed inset-0 bg-slate-950/30 backdrop-blur-[1px] z-30 md:hidden"
         />
       )}
 
@@ -598,14 +598,19 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      <div className="min-h-screen flex flex-col">
+      <div
+        className={[
+          "min-h-screen flex flex-col transition-[margin] duration-300",
+          isSidebarOpen ? "md:ml-80" : "md:ml-0",
+        ].join(" ")}
+      >
         <header className="h-20 bg-white/85 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 flex items-center justify-between sticky top-0 z-20">
           <div className="flex items-center gap-4 min-w-0">
             <button
               type="button"
-              onClick={() => setIsSidebarOpen(true)}
+              onClick={() => setIsSidebarOpen((prev) => !prev)}
               className="p-3 rounded-2xl bg-white border border-slate-100 shadow-sm text-slate-600 hover:text-pink-600 hover:bg-pink-50 transition-all"
-              aria-label="Mở menu"
+              aria-label={isSidebarOpen ? "Đóng menu" : "Mở menu"}
             >
               <Menu size={22} />
             </button>
