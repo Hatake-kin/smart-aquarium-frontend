@@ -61,6 +61,7 @@ type RealtimeNotification = {
   message: string;
   severity?: "low" | "medium" | "high" | string;
   timestamp: string;
+  href?: string;
 };
 
 const getRealtimeUrl = () => {
@@ -249,6 +250,7 @@ export default function DashboardLayout({
         message: payload.message || "Có cảnh báo mới từ hệ thống",
         severity: payload.severity || "medium",
         timestamp: payload.timestamp || new Date().toISOString(),
+        href: "/alerts",
       };
 
       setNotifications((prev) => [item, ...prev].slice(0, 10));
@@ -267,6 +269,7 @@ export default function DashboardLayout({
           "Dữ liệu cảm biến bất thường",
         severity: payload.severity || "medium",
         timestamp: payload.timestamp || new Date().toISOString(),
+        href: "/alerts",
       };
 
       setNotifications((prev) => [item, ...prev].slice(0, 10));
@@ -283,6 +286,7 @@ export default function DashboardLayout({
           "Có yêu cầu hỗ trợ mới từ người dùng",
         severity: "medium",
         timestamp: payload?.timestamp || new Date().toISOString(),
+        href: "/admin/support",
       };
 
       setNotifications((prev) => [item, ...prev].slice(0, 10));
@@ -314,6 +318,7 @@ export default function DashboardLayout({
             ? "low"
             : "medium",
         timestamp: payload?.timestamp || new Date().toISOString(),
+        href: "/admin/support",
       };
 
       setNotifications((prev) => [item, ...prev].slice(0, 10));
@@ -738,7 +743,7 @@ export default function DashboardLayout({
                         Thông báo realtime
                       </h3>
                       <p className="text-xs text-slate-400 mt-1">
-                        Trạng thái:{" "}
+                        Bấm thông báo để mở trang liên quan · Trạng thái:{" "}
                         <b
                           className={
                             socketStatus === "online"
@@ -779,7 +784,13 @@ export default function DashboardLayout({
                       return (
                         <div
                           key={item.id}
-                          className="p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                          onClick={() => {
+                            router.push(item.href || "/alerts");
+                            setIsNotificationOpen(false);
+                            setUnreadCount(0);
+                          }}
+                          className="p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                          title="Bấm để mở trang liên quan"
                         >
                           <div className="flex items-start gap-3">
                             <div
