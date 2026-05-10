@@ -126,6 +126,21 @@ export default function SupportPage() {
           );
         }
       }
+
+      const handleSupportUpdated = () => {
+        loadRequests();
+      };
+
+      window.addEventListener("support_request_updated", handleSupportUpdated);
+
+      loadRequests();
+
+      return () => {
+        window.removeEventListener(
+          "support_request_updated",
+          handleSupportUpdated
+        );
+      };
     }
 
     loadRequests();

@@ -273,6 +273,61 @@ export default function DashboardLayout({
       setUnreadCount((prev) => prev + 1);
     });
 
+    socket.on("support_request_created", (payload: any) => {
+      if (userData.role !== "admin" && userData.role !== "moderator") return;
+
+      const item: RealtimeNotification = {
+        id: "support_created_" + String(payload?.id || Date.now()),
+        message:
+          payload?.message ||
+          "Có yêu cầu hỗ trợ mới từ người dùng",
+        severity: "medium",
+        timestamp: payload?.timestamp || new Date().toISOString(),
+      };
+
+      setNotifications((prev) => [item, ...prev].slice(0, 10));
+      setUnreadCount((prev) => prev + 1);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("support_request_created", {
+            detail: payload,
+          })
+        );
+      }
+    });
+
+    socket.on("support_request_updated", (payload: any) => {
+      const targetUserId = Number(payload?.user_id || payload?.userId || 0);
+
+      if (targetUserId && Number(userData.id) !== targetUserId) return;
+
+      const item: RealtimeNotification = {
+        id: "support_updated_" + String(payload?.id || Date.now()),
+        message:
+          payload?.message ||
+          "Admin đã phản hồi yêu cầu hỗ trợ của bạn",
+        severity:
+          payload?.status === "rejected"
+            ? "high"
+            : payload?.status === "resolved"
+            ? "low"
+            : "medium",
+        timestamp: payload?.timestamp || new Date().toISOString(),
+      };
+
+      setNotifications((prev) => [item, ...prev].slice(0, 10));
+      setUnreadCount((prev) => prev + 1);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("support_request_updated", {
+            detail: payload,
+          })
+        );
+      }
+    });
+
     return () => {
       socket.disconnect();
     };

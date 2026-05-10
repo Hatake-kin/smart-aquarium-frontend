@@ -161,6 +161,21 @@ export default function AdminSupportPage() {
   useEffect(() => {
     loadCurrentUser();
     loadRequests("all");
+
+    if (typeof window !== "undefined") {
+      const handleSupportCreated = () => {
+        loadRequests(filterStatus);
+      };
+
+      window.addEventListener("support_request_created", handleSupportCreated);
+
+      return () => {
+        window.removeEventListener(
+          "support_request_created",
+          handleSupportCreated
+        );
+      };
+    }
   }, []);
 
   const canOpenPage =
