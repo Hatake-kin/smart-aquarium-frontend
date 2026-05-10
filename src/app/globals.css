@@ -491,3 +491,76 @@ aside nav a.bg-blue-600 {
 .profile-page .text-gray-500 {
   color: #4b5563 !important;
 }
+
+/* ===== SmartAQ mobile responsive safety patch ===== */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  main {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  main > div {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  section,
+  article,
+  form {
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  div[style*="display: grid"] {
+    max-width: 100% !important;
+  }
+
+  table {
+    min-width: 680px;
+  }
+
+  .mobile-table-scroll,
+  table {
+    overflow-x: auto;
+  }
+}

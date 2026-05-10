@@ -656,7 +656,7 @@ export default function DashboardLayout({
               </button>
 
               {isNotificationOpen && (
-                <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-96 bg-white border border-slate-100 rounded-2xl shadow-2xl shadow-slate-200/70 overflow-hidden z-50">
+                <div className="fixed left-3 right-3 top-20 max-h-[75vh] bg-white border border-slate-100 rounded-2xl shadow-2xl shadow-slate-200/70 overflow-hidden z-50 md:absolute md:left-auto md:right-0 md:top-auto md:mt-3 md:w-96 md:max-w-96">
                   <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                     <div>
                       <h3 className="font-black text-slate-800">
@@ -686,7 +686,7 @@ export default function DashboardLayout({
                     </button>
                   </div>
 
-                  <div className="max-h-96 overflow-y-auto">
+                  <div className="max-h-[55vh] md:max-h-96 overflow-y-auto">
                     {notifications.length === 0 && (
                       <div className="p-6 text-center">
                         <p className="text-slate-500 font-semibold">
