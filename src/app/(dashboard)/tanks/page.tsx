@@ -384,9 +384,16 @@ export default function TanksPage() {
             <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
               <b className="text-cyan-900">Gói hiện tại khi tạo bể: Basic</b>
               <p className="mt-2 text-sm font-semibold text-cyan-800">
-                Người dùng thường không thể tự chọn Premium. Vui lòng liên hệ
-                admin để nâng cấp gói.
+                Người dùng thường không thể tự chọn Premium. Vui lòng gửi yêu cầu
+                nâng cấp để admin xử lý.
               </p>
+
+              <a
+                href="/support?type=upgrade_plan"
+                className="mt-3 inline-flex rounded-2xl border border-cyan-400 px-4 py-2 text-sm font-black text-cyan-800 transition hover:bg-cyan-100"
+              >
+                Gửi yêu cầu nâng cấp Premium
+              </a>
             </div>
           )}
 

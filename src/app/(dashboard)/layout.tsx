@@ -26,6 +26,8 @@ import {
   CheckCheck,
   Download,
   ShieldCheck,
+  LifeBuoy,
+  MessageSquare,
 } from "lucide-react";
 
 type UserData = {
@@ -347,6 +349,20 @@ export default function DashboardLayout({
       ],
     },
     {
+      id: "support",
+      name: "Hỗ trợ",
+      icon: LifeBuoy,
+      children: [
+        { name: "Trung tâm hỗ trợ", href: "/support", icon: LifeBuoy },
+        {
+          name: "Quản lý hỗ trợ",
+          href: "/admin/support",
+          icon: MessageSquare,
+          managerOnly: true,
+        },
+      ],
+    },
+    {
       id: "account",
       name: "Tài khoản",
       icon: UserCircle,
@@ -410,6 +426,10 @@ export default function DashboardLayout({
     ? "Cài đặt ngưỡng"
     : isActive("/alerts")
     ? "Lịch sử cảnh báo"
+    : isActive("/admin/support")
+    ? "Quản lý hỗ trợ"
+    : isActive("/support")
+    ? "Trung tâm hỗ trợ"
     : isActive("/system-logs")
     ? "Nhật ký hệ thống"
     : isActive("/admin/users")
