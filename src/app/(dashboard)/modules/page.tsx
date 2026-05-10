@@ -482,6 +482,9 @@ export default function ModulesPage() {
   const [creating, setCreating] = useState(false);
   const [publishingConfig, setPublishingConfig] = useState(false);
   const [configAck, setConfigAck] = useState<ConfigAckPayload | null>(null);
+  const [editingModuleId, setEditingModuleId] = useState<number | null>(null);
+  const [editConfigText, setEditConfigText] = useState("");
+  const [updatingModuleId, setUpdatingModuleId] = useState<number | null>(null);
 
   const [connectionType, setConnectionType] = useState<"gpio" | "wireless">(
     "gpio"
@@ -1031,6 +1034,71 @@ export default function ModulesPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const startEditModuleConfig = (module: ModuleItem) => {
+    setEditingModuleId(module.id);
+    setEditConfigText(JSON.stringify(module.config_json || {}, null, 2));
+    setConfigAck(null);
+  };
+
+  const cancelEditModuleConfig = () => {
+    setEditingModuleId(null);
+    setEditConfigText("");
+  };
+
+  const saveModuleConfig = async (module: ModuleItem) => {
+    let parsedConfig: any = {};
+
+    try {
+      parsedConfig = editConfigText.trim() ? JSON.parse(editConfigText) : {};
+    } catch {
+      setStatus("error", "config_json khong dung dinh dang JSON");
+      return;
+    }
+
+    try {
+      setUpdatingModuleId(module.id);
+      setConfigAck(null);
+      setStatus("loading", "Dang luu config_json va gui config xuong ESP...");
+
+      const token = getToken();
+
+      const res = await fetch(`${API_URL}/api/device-modules/${module.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          config_json: parsedConfig,
+        }),
+      });
+
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        throw new Error(data.message || "Cap nhat module that bai");
+      }
+
+      setStatus(
+        "success",
+        "Da luu config_json. Backend da gui config moi xuong ESP, dang cho ACK..."
+      );
+
+      setEditingModuleId(null);
+      setEditConfigText("");
+
+      await loadDeviceModules(selectedDeviceId);
+    } catch (err) {
+      console.error(err);
+      setStatus(
+        "error",
+        err instanceof Error ? err.message : "Khong ket noi duoc backend"
+      );
+    } finally {
+      setUpdatingModuleId(null);
     }
   };
 
@@ -1818,28 +1886,120 @@ export default function ModulesPage() {
                     <b>Đơn vị:</b> {module.unit}
                   </p>
                 )}
-
-                {module.config_json && (
-                  <details>
+                <div style={{ marginTop: 10 }}>
+                  <details open={editingModuleId === module.id ? true : undefined}>
                     <summary style={{ cursor: "pointer", fontWeight: "bold" }}>
-                      Xem config_json
+                      config_json
                     </summary>
 
-                    <pre
+                    {editingModuleId === module.id ? (
+                      <div style={{ marginTop: 10 }}>
+                        <textarea
+                          value={editConfigText}
+                          onChange={(e) => setEditConfigText(e.target.value)}
+                          disabled={updatingModuleId === module.id}
+                          style={{
+                            width: "100%",
+                            minHeight: 190,
+                            padding: 12,
+                            borderRadius: 12,
+                            border: "1px solid #67e8f9",
+                            background: "#fff",
+                            fontSize: 12,
+                            fontFamily:
+                              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                          }}
+                        />
+
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            marginTop: 10,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => saveModuleConfig(module)}
+                            disabled={updatingModuleId === module.id || loading}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 10,
+                              border: "1px solid #16a34a",
+                              background:
+                                updatingModuleId === module.id || loading
+                                  ? "#94a3b8"
+                                  : "#16a34a",
+                              color: "#fff",
+                              fontWeight: "bold",
+                              cursor:
+                                updatingModuleId === module.id || loading
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            {updatingModuleId === module.id ? "Dang luu..." : "Luu JSON"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={cancelEditModuleConfig}
+                            disabled={updatingModuleId === module.id}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 10,
+                              border: "1px solid #cbd5e1",
+                              background: "#f8fafc",
+                              color: "#334155",
+                              fontWeight: "bold",
+                              cursor:
+                                updatingModuleId === module.id ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            Huy
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <pre
+                        style={{
+                          background: "#f8fafc",
+                          borderRadius: 12,
+                          padding: 12,
+                          overflowX: "auto",
+                          fontSize: 12,
+                        }}
+                      >
+                        {JSON.stringify(module.config_json || {}, null, 2)}
+                      </pre>
+                    )}
+                  </details>
+
+                  {editingModuleId !== module.id && (
+                    <button
+                      type="button"
+                      onClick={() => startEditModuleConfig(module)}
+                      disabled={loading || updatingModuleId === module.id}
                       style={{
-                        background: "#f8fafc",
-                        borderRadius: 12,
-                        padding: 12,
-                        overflowX: "auto",
-                        fontSize: 12,
+                        marginTop: 10,
+                        padding: "8px 12px",
+                        borderRadius: 10,
+                        border: "1px solid #0891b2",
+                        background: "#ecfeff",
+                        color: "#0e7490",
+                        fontWeight: "bold",
+                        cursor:
+                          loading || updatingModuleId === module.id
+                            ? "not-allowed"
+                            : "pointer",
                       }}
                     >
-                      {JSON.stringify(module.config_json, null, 2)}
-                    </pre>
-                  </details>
-                )}
-
-                <button
+                      Sua JSON
+                    </button>
+                  )}
+                </div>
+<button
                   onClick={() => deleteModule(module.id)}
                   disabled={loading}
                   style={{
