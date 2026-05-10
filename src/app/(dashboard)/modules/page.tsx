@@ -1067,14 +1067,14 @@ export default function ModulesPage() {
     try {
       parsedConfig = editConfigText.trim() ? JSON.parse(editConfigText) : {};
     } catch {
-      setStatus("error", "config_json khong dung dinh dang JSON");
+      setStatus("error", "config_json không đúng định dạng JSON");
       return;
     }
 
     try {
       setUpdatingModuleId(module.id);
       setConfigAck(null);
-      setStatus("loading", "Dang luu config_json va gui config xuong ESP...");
+      setStatus("loading", "Đang lưu config_json và gửi config xuống ESP...");
 
       const token = getToken();
 
@@ -1092,12 +1092,12 @@ export default function ModulesPage() {
       const data = await readJsonSafe(res);
 
       if (!res.ok) {
-        throw new Error(data.message || "Cap nhat module that bai");
+        throw new Error(data.message || "Cập nhật module thất bại");
       }
 
       setStatus(
         "success",
-        "Da luu config_json. Backend da gui config moi xuong ESP, dang cho ACK..."
+        "Đã lưu config_json. Backend đã gửi config mới xuống ESP, đang chờ ACK..."
       );
 
       setEditingModuleId(null);
@@ -1108,7 +1108,7 @@ export default function ModulesPage() {
       console.error(err);
       setStatus(
         "error",
-        err instanceof Error ? err.message : "Khong ket noi duoc backend"
+        err instanceof Error ? err.message : "Không kết nối được backend"
       );
     } finally {
       setUpdatingModuleId(null);
@@ -2057,7 +2057,7 @@ export default function ModulesPage() {
                                   : "pointer",
                             }}
                           >
-                            {updatingModuleId === module.id ? "Dang luu..." : "Luu JSON"}
+                            {updatingModuleId === module.id ? "Đang lưu..." : "Lưu JSON"}
                           </button>
 
                           <button
@@ -2075,7 +2075,7 @@ export default function ModulesPage() {
                                 updatingModuleId === module.id ? "not-allowed" : "pointer",
                             }}
                           >
-                            Huy
+                            Hủy
                           </button>
                         </div>
                       </div>
@@ -2113,7 +2113,7 @@ export default function ModulesPage() {
                             : "pointer",
                       }}
                     >
-                      Sua JSON
+                      Sửa JSON
                     </button>
                   )}
                 </div>
