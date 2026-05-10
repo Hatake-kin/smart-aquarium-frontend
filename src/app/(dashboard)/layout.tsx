@@ -13,6 +13,8 @@ import {
   Loader2,
   Bell,
   ChevronRight,
+  ChevronDown,
+  Menu,
   Camera,
   SlidersHorizontal,
   TriangleAlert,
@@ -22,6 +24,8 @@ import {
   Waves,
   X,
   CheckCheck,
+  Download,
+  ShieldCheck,
 } from "lucide-react";
 
 type UserData = {
@@ -32,10 +36,19 @@ type UserData = {
   role?: "user" | "admin" | "moderator";
 };
 
-type NavItem = {
+type NavChild = {
   name: string;
   href: string;
   icon: any;
+  adminOnly?: boolean;
+  managerOnly?: boolean;
+};
+
+type NavGroup = {
+  id: string;
+  name: string;
+  icon: any;
+  children: NavChild[];
   adminOnly?: boolean;
   managerOnly?: boolean;
 };
@@ -67,7 +80,7 @@ const getRealtimeUrl = () => {
       host.startsWith("192.168.") ||
       host.startsWith("10.")
     ) {
-      return `http://${host}:5000`;
+      return "http://" + host + ":5000";
     }
 
     return window.location.origin;
@@ -88,9 +101,14 @@ export default function DashboardLayout({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
 
-  const [notifications, setNotifications] = useState<RealtimeNotification[]>(
-    []
-  );
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    overview: true,
+    aquarium: true,
+    iot: true,
+  });
+
+  const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [socketStatus, setSocketStatus] = useState<"online" | "offline">(
@@ -145,7 +163,7 @@ export default function DashboardLayout({
         const res = await fetch("/api/users/me", {
           method: "GET",
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: "Bearer " + token,
             "Content-Type": "application/json",
           },
         });
@@ -155,7 +173,6 @@ export default function DashboardLayout({
         }
 
         const data = await res.json();
-
         const apiUser = data.user || data;
 
         const rawLocalUser = localStorage.getItem("user");
@@ -186,18 +203,18 @@ export default function DashboardLayout({
     const token = localStorage.getItem("token") || "";
     const realtimeUrl = getRealtimeUrl();
 
-   const socketOptions = {
-  path: "/realtime",
-  transports: ["polling"],
-  upgrade: false,
-  auth: {
-    token,
-  },
-  reconnection: true,
-  reconnectionAttempts: 10,
-  reconnectionDelay: 1000,
-  timeout: 10000,
-};
+    const socketOptions = {
+      path: "/realtime",
+      transports: ["polling"],
+      upgrade: false,
+      auth: {
+        token,
+      },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 10000,
+    };
 
     const socket = realtimeUrl
       ? io(realtimeUrl, socketOptions)
@@ -225,7 +242,7 @@ export default function DashboardLayout({
 
     socket.on("alert", (payload: any) => {
       const item: RealtimeNotification = {
-        id: `${Date.now()}_${Math.random()}`,
+        id: String(Date.now()) + "_" + String(Math.random()),
         tankId: payload.tankId || payload.tank_id,
         message: payload.message || "Có cảnh báo mới từ hệ thống",
         severity: payload.severity || "medium",
@@ -240,7 +257,7 @@ export default function DashboardLayout({
       if (!payload?.alert && !payload?.message) return;
 
       const item: RealtimeNotification = {
-        id: `${Date.now()}_${Math.random()}`,
+        id: String(Date.now()) + "_" + String(Math.random()),
         tankId: payload.tankId || payload.tank_id,
         message:
           payload.message ||
@@ -264,31 +281,7 @@ export default function DashboardLayout({
     return pathname.startsWith(path);
   };
 
-  const navigation: NavItem[] = [
-    { name: "Tổng quan", href: "/", icon: LayoutDashboard },
-    { name: "Bể cá của tôi", href: "/tanks", icon: Fish },
-    { name: "Thiết bị", href: "/devices", icon: Cpu },
-    { name: "Cấu hình module", href: "/modules", icon: SlidersHorizontal },
-    { name: "Điều khiển", href: "/actuators", icon: Power },
-    { name: "Camera", href: "/camera", icon: Camera },
-    { name: "Cài đặt ngưỡng", href: "/thresholds", icon: SlidersHorizontal },
-    { name: "Lịch sử cảnh báo", href: "/alerts", icon: TriangleAlert },
-    {
-      name: "Nhật ký hệ thống",
-      href: "/system-logs",
-      icon: FileText,
-      managerOnly: true,
-    },
-    {
-      name: "Quản lý người dùng",
-      href: "/admin/users",
-      icon: Users,
-      managerOnly: true,
-    },
-    { name: "Cá nhân", href: "/profile", icon: UserCircle },
-  ];
-
-  const visibleNavigation = navigation.filter((item) => {
+  const canShowItem = (item: NavChild | NavGroup) => {
     if (item.adminOnly && userData?.role !== "admin") {
       return false;
     }
@@ -302,7 +295,92 @@ export default function DashboardLayout({
     }
 
     return true;
-  });
+  };
+
+  const navigationGroups: NavGroup[] = [
+    {
+      id: "overview",
+      name: "Tổng quan",
+      icon: LayoutDashboard,
+      children: [{ name: "Bảng điều khiển", href: "/", icon: LayoutDashboard }],
+    },
+    {
+      id: "aquarium",
+      name: "Hồ cá",
+      icon: Fish,
+      children: [
+        { name: "Bể cá của tôi", href: "/tanks", icon: Fish },
+        { name: "Cài đặt ngưỡng", href: "/thresholds", icon: SlidersHorizontal },
+        { name: "Lịch sử cảnh báo", href: "/alerts", icon: TriangleAlert },
+      ],
+    },
+    {
+      id: "iot",
+      name: "Thiết bị IoT",
+      icon: Cpu,
+      children: [
+        { name: "Quản lý thiết bị", href: "/devices", icon: Cpu },
+        { name: "Cấu hình module", href: "/modules", icon: SlidersHorizontal },
+        { name: "Điều khiển", href: "/actuators", icon: Power },
+        { name: "Camera", href: "/camera", icon: Camera },
+        { name: "Firmware thiết bị", href: "/firmware", icon: Download },
+      ],
+    },
+    {
+      id: "admin",
+      name: "Quản trị",
+      icon: ShieldCheck,
+      managerOnly: true,
+      children: [
+        {
+          name: "Nhật ký hệ thống",
+          href: "/system-logs",
+          icon: FileText,
+          managerOnly: true,
+        },
+        {
+          name: "Quản lý người dùng",
+          href: "/admin/users",
+          icon: Users,
+          managerOnly: true,
+        },
+      ],
+    },
+    {
+      id: "account",
+      name: "Tài khoản",
+      icon: UserCircle,
+      children: [{ name: "Cá nhân", href: "/profile", icon: UserCircle }],
+    },
+  ];
+
+  const visibleGroups = navigationGroups
+    .filter(canShowItem)
+    .map((group) => ({
+      ...group,
+      children: group.children.filter(canShowItem),
+    }))
+    .filter((group) => group.children.length > 0);
+
+  useEffect(() => {
+    const activeGroup = visibleGroups.find((group) =>
+      group.children.some((child) => isActive(child.href))
+    );
+
+    if (activeGroup) {
+      setOpenGroups((prev) => ({
+        ...prev,
+        [activeGroup.id]: true,
+      }));
+    }
+  }, [pathname]);
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  };
 
   const displayName =
     userData?.name || userData?.full_name || userData?.email || "User";
@@ -326,6 +404,8 @@ export default function DashboardLayout({
     ? "Điều khiển thiết bị"
     : isActive("/camera")
     ? "Camera"
+    : isActive("/firmware")
+    ? "Firmware thiết bị"
     : isActive("/thresholds")
     ? "Cài đặt ngưỡng"
     : isActive("/alerts")
@@ -377,8 +457,8 @@ export default function DashboardLayout({
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc]">
         <div className="relative flex items-center justify-center">
-          <Loader2 className="h-14 w-14 animate-spin text-blue-600" />
-          <Waves className="absolute h-5 w-5 text-blue-400 animate-pulse" />
+          <Loader2 className="h-14 w-14 animate-spin text-pink-600" />
+          <Waves className="absolute h-5 w-5 text-pink-400 animate-pulse" />
         </div>
         <p className="mt-4 text-slate-500 font-semibold tracking-wide">
           ĐANG XÁC THỰC...
@@ -390,53 +470,124 @@ export default function DashboardLayout({
   if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen bg-[#f1f5f9] flex">
-      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col fixed h-full z-20 shadow-xl shadow-slate-200/50">
-        <div className="p-8 border-b border-slate-50">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform">
+    <div className="min-h-screen bg-[#f1f5f9]">
+      {isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Đóng menu"
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-30"
+        />
+      )}
+
+      <aside
+        className={[
+          "fixed inset-y-0 left-0 z-40 w-80 max-w-[88vw] bg-white border-r border-slate-200 flex flex-col shadow-2xl shadow-slate-300/50 transition-transform duration-300",
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+      >
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <Link
+            href="/"
+            onClick={() => setIsSidebarOpen(false)}
+            className="flex items-center gap-3 group"
+          >
+            <div className="bg-pink-500 p-2 rounded-xl shadow-lg shadow-pink-200 group-hover:scale-110 transition-transform">
               <Waves className="text-white" size={26} strokeWidth={2.8} />
             </div>
             <span className="text-xl font-black text-slate-800 tracking-tighter">
-              SMART<span className="text-blue-600">AQ</span>
+              SMART<span className="text-pink-600">AQ</span>
             </span>
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"
+            aria-label="Đóng sidebar"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        <nav className="flex-1 p-6 space-y-2">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-4 mb-4">
+        <nav className="flex-1 p-5 overflow-y-auto">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-3 mb-4">
             Menu chính
           </p>
 
-          {visibleNavigation.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 group ${
-                isActive(item.href)
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-blue-600"
-              }`}
-            >
-              <div className="flex items-center gap-3 font-bold text-sm">
-                <item.icon
-                  size={22}
-                  strokeWidth={isActive(item.href) ? 2.8 : 2.3}
-                />
-                <span>{item.name}</span>
-              </div>
+          <div className="space-y-3">
+            {visibleGroups.map((group) => {
+              const GroupIcon = group.icon;
+              const isGroupActive = group.children.some((child) =>
+                isActive(child.href)
+              );
+              const isOpen = Boolean(openGroups[group.id]);
 
-              {isActive(item.href) && (
-                <ChevronRight
-                  size={16}
-                  className="animate-in slide-in-from-left-2"
-                />
-              )}
-            </Link>
-          ))}
+              return (
+                <div key={group.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    className={[
+                      "w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200",
+                      isGroupActive
+                        ? "bg-pink-50 text-pink-700"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-pink-600",
+                    ].join(" ")}
+                  >
+                    <span className="flex items-center gap-3 font-black text-sm">
+                      <GroupIcon size={21} strokeWidth={2.4} />
+                      {group.name}
+                    </span>
+
+                    <ChevronDown
+                      size={17}
+                      className={[
+                        "transition-transform duration-200",
+                        isOpen ? "rotate-180" : "rotate-0",
+                      ].join(" ")}
+                    />
+                  </button>
+
+                  {isOpen && (
+                    <div className="mt-2 ml-4 pl-3 border-l border-slate-100 space-y-1">
+                      {group.children.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setIsSidebarOpen(false)}
+                          className={[
+                            "flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 group",
+                            isActive(item.href)
+                              ? "bg-pink-600 text-white shadow-lg shadow-pink-200"
+                              : "text-slate-500 hover:bg-slate-50 hover:text-pink-600",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-center gap-3 font-bold text-sm">
+                            <item.icon
+                              size={20}
+                              strokeWidth={isActive(item.href) ? 2.8 : 2.3}
+                            />
+                            <span>{item.name}</span>
+                          </div>
+
+                          {isActive(item.href) && (
+                            <ChevronRight
+                              size={16}
+                              className="animate-in slide-in-from-left-2"
+                            />
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </nav>
 
-        <div className="p-6 border-t border-slate-50">
+        <div className="p-5 border-t border-slate-100">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-5 py-4 text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-200 font-bold text-sm active:scale-95"
@@ -447,25 +598,36 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col ml-72">
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-100 px-10 flex items-center justify-between sticky top-0 z-10">
-          <div>
-            <h2 className="text-slate-800 font-black text-xl tracking-tight">
-              {pageTitle}
-            </h2>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">
-              {greeting}, {displayName}!
-            </p>
+      <div className="min-h-screen flex flex-col">
+        <header className="h-20 bg-white/85 backdrop-blur-md border-b border-slate-100 px-4 md:px-8 flex items-center justify-between sticky top-0 z-20">
+          <div className="flex items-center gap-4 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-3 rounded-2xl bg-white border border-slate-100 shadow-sm text-slate-600 hover:text-pink-600 hover:bg-pink-50 transition-all"
+              aria-label="Mở menu"
+            >
+              <Menu size={22} />
+            </button>
+
+            <div className="min-w-0">
+              <h2 className="text-slate-800 font-black text-lg md:text-xl tracking-tight truncate">
+                {pageTitle}
+              </h2>
+              <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">
+                {greeting}, {displayName}!
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 md:gap-6">
             <div className="relative">
               <button
                 onClick={() => {
                   setIsNotificationOpen((prev) => !prev);
                   setUnreadCount(0);
                 }}
-                className="relative p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all group"
+                className="relative p-2.5 text-slate-400 hover:text-pink-600 hover:bg-pink-50 rounded-xl transition-all group"
                 title={
                   socketStatus === "online"
                     ? "Thông báo realtime đang kết nối"
@@ -481,14 +643,15 @@ export default function DashboardLayout({
                 )}
 
                 <span
-                  className={`absolute bottom-1 right-1 w-2 h-2 rounded-full border border-white ${
-                    socketStatus === "online" ? "bg-green-500" : "bg-slate-400"
-                  }`}
+                  className={[
+                    "absolute bottom-1 right-1 w-2 h-2 rounded-full border border-white",
+                    socketStatus === "online" ? "bg-green-500" : "bg-slate-400",
+                  ].join(" ")}
                 />
               </button>
 
               {isNotificationOpen && (
-                <div className="absolute right-0 mt-3 w-96 bg-white border border-slate-100 rounded-2xl shadow-2xl shadow-slate-200/70 overflow-hidden z-50">
+                <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-96 bg-white border border-slate-100 rounded-2xl shadow-2xl shadow-slate-200/70 overflow-hidden z-50">
                   <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                     <div>
                       <h3 className="font-black text-slate-800">
@@ -525,8 +688,7 @@ export default function DashboardLayout({
                           Chưa có thông báo mới
                         </p>
                         <p className="text-xs text-slate-400 mt-2">
-                          Khi MQTT phát hiện cảnh báo, thông báo sẽ xuất hiện ở
-                          đây.
+                          Khi MQTT phát hiện cảnh báo, thông báo sẽ xuất hiện ở đây.
                         </p>
                       </div>
                     )}
@@ -544,7 +706,7 @@ export default function DashboardLayout({
                               className="w-10 h-10 rounded-2xl flex items-center justify-center"
                               style={{
                                 background: s.background,
-                                border: `1px solid ${s.border}`,
+                                border: "1px solid " + s.border,
                                 color: s.color,
                               }}
                             >
@@ -558,7 +720,7 @@ export default function DashboardLayout({
                                   style={{
                                     color: s.color,
                                     background: s.background,
-                                    border: `1px solid ${s.border}`,
+                                    border: "1px solid " + s.border,
                                   }}
                                 >
                                   {s.label}
@@ -590,7 +752,7 @@ export default function DashboardLayout({
                       onClick={() => {
                         setUnreadCount(0);
                       }}
-                      className="text-xs font-bold text-slate-500 hover:text-blue-600 flex items-center gap-2"
+                      className="text-xs font-bold text-slate-500 hover:text-pink-600 flex items-center gap-2"
                     >
                       <CheckCheck size={15} />
                       Đánh dấu đã xem
@@ -599,7 +761,7 @@ export default function DashboardLayout({
                     <Link
                       href="/alerts"
                       onClick={() => setIsNotificationOpen(false)}
-                      className="text-xs font-bold text-blue-600 hover:underline"
+                      className="text-xs font-bold text-pink-600 hover:underline"
                     >
                       Xem lịch sử cảnh báo
                     </Link>
@@ -608,7 +770,7 @@ export default function DashboardLayout({
               )}
             </div>
 
-            <div className="flex items-center gap-3 pl-6 border-l border-slate-100">
+            <div className="flex items-center gap-3 pl-3 md:pl-6 border-l border-slate-100">
               <div className="text-right hidden md:block">
                 <p className="text-sm font-bold text-slate-700 leading-none">
                   {displayName}
@@ -618,7 +780,7 @@ export default function DashboardLayout({
                 </p>
               </div>
 
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 border-2 border-white shadow-md flex items-center justify-center text-white font-bold">
+              <div className="w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 border-2 border-white shadow-md flex items-center justify-center text-white font-bold">
                 {displayName?.charAt(0)?.toUpperCase() || (
                   <UserCircle size={22} />
                 )}
@@ -627,7 +789,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className="flex-1 p-10">
+        <main className="flex-1 p-4 md:p-10">
           <div className="max-w-7xl mx-auto animate-in fade-in zoom-in-95 duration-700">
             {children}
           </div>
