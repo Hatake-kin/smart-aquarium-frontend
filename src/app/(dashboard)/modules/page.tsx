@@ -3,6 +3,204 @@
 import { useEffect, useMemo, useState } from "react";
 import io from "socket.io-client";
 
+
+// WIRELESS_NODE_GPIO_SUGGESTIONS_PATCH_V3
+type WirelessNodeUsedPinDetail = {
+  pin: number;
+  key: string;
+  moduleLabel: string;
+};
+
+type WirelessNodePinInfo = {
+  boardPins: number[];
+  usedPins: number[];
+  freePins: number[];
+  usedDetails: WirelessNodeUsedPinDetail[];
+};
+
+const WIRELESS_NODE_PIN_KEYS = [
+  "trig_pin",
+  "echo_pin",
+  "data_pin",
+  "output_pin",
+  "signal_pin",
+  "adc_pin",
+  "analog_pin",
+] as const;
+
+const WIRELESS_NODE_BOARD_PINS: Record<string, number[]> = {
+  esp32_s3mini: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21],
+  esp32_s3: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21],
+  esp32_c3: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 18, 19, 20, 21],
+  esp32: [4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33],
+};
+
+function parseWirelessModuleConfigSafe(raw: unknown): Record<string, any> {
+  if (!raw) return {};
+  if (typeof raw === "object" && !Array.isArray(raw)) return { ...(raw as Record<string, any>) };
+  if (typeof raw !== "string") return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeWirelessNodeType(nodeType: unknown): string {
+  const value = String(nodeType || "esp32_s3mini").trim().toLowerCase();
+  if (value === "esp32-s3-mini" || value === "esp32s3mini" || value === "s3mini") return "esp32_s3mini";
+  if (value === "esp32-s3" || value === "esp32s3") return "esp32_s3";
+  if (value === "esp32-c3" || value === "esp32c3") return "esp32_c3";
+  return value || "esp32_s3mini";
+}
+
+function toWirelessPinNumber(value: unknown): number | null {
+  const pin = Number(value);
+  if (!Number.isInteger(pin) || pin < 0) return null;
+  return pin;
+}
+
+function getWirelessNodeUsedPinDetails(
+  deviceModules: any[],
+  targetNodeCode: string
+): WirelessNodeUsedPinDetail[] {
+  const targetNode = String(targetNodeCode || "").trim();
+  if (!targetNode) return [];
+
+  const rows = Array.isArray(deviceModules) ? deviceModules : [];
+
+  return rows.flatMap((item) => {
+    const cfg = parseWirelessModuleConfigSafe(item?.config_json);
+    const connectionType = String(item?.connection_type || cfg.connection_type || "").toLowerCase();
+    const itemNode = String(item?.node_code || cfg.node_code || "").trim();
+
+    if (connectionType && connectionType !== "wireless") return [];
+    if (itemNode !== targetNode) return [];
+
+    const moduleLabel = String(item?.module_code || item?.module_name || item?.name || item?.id || "module");
+
+    return WIRELESS_NODE_PIN_KEYS.flatMap((key) => {
+      const pin = toWirelessPinNumber(cfg[key]);
+      return pin === null ? [] : [{ pin, key, moduleLabel }];
+    });
+  });
+}
+
+function getWirelessNodePinInfo(
+  deviceModules: any[],
+  nodeType: string,
+  targetNodeCode: string
+): WirelessNodePinInfo {
+  const normalizedType = normalizeWirelessNodeType(nodeType);
+  const boardPins = [...(WIRELESS_NODE_BOARD_PINS[normalizedType] || WIRELESS_NODE_BOARD_PINS.esp32_s3mini)];
+  const usedDetails = getWirelessNodeUsedPinDetails(deviceModules, targetNodeCode);
+  const usedPins = Array.from(new Set(usedDetails.map((item) => item.pin))).sort((a, b) => a - b);
+  const usedSet = new Set(usedPins);
+  const freePins = boardPins.filter((pin) => !usedSet.has(pin));
+
+  return { boardPins, usedPins, freePins, usedDetails };
+}
+
+function buildSuggestedWirelessNodeConfig(
+  current: Record<string, any>,
+  freePins: number[],
+  moduleType: string
+): Record<string, any> {
+  const type = String(moduleType || current.module_type || "hc_sr04").trim().toLowerCase();
+  const pins = [...freePins];
+
+  const takePin = (fallback: unknown) => {
+    const next = pins.shift();
+    if (next !== undefined) return next;
+    const oldPin = toWirelessPinNumber(fallback);
+    return oldPin === null ? 0 : oldPin;
+  };
+
+  const base = {
+    ...current,
+    protocol: current.protocol || "esp_now",
+    node_type: current.node_type || "esp32_s3mini",
+    node_code: current.node_code || "S3_WATER_01",
+    module_type: type,
+  };
+
+  if (type === "hc_sr04" || type === "hcsr04" || type === "ultrasonic") {
+    return {
+      ...base,
+      module_type: "hc_sr04",
+      trig_pin: takePin(current.trig_pin),
+      echo_pin: takePin(current.echo_pin),
+      tank_depth_cm: Number(current.tank_depth_cm || 30),
+      mount_offset_cm: Number(current.mount_offset_cm || 0),
+      read_interval_ms: Number(current.read_interval_ms || 2000),
+    };
+  }
+
+  if (type === "ds18b20" || type === "dht22" || type === "dht11") {
+    return {
+      ...base,
+      data_pin: takePin(current.data_pin),
+      read_interval_ms: Number(current.read_interval_ms || 2000),
+    };
+  }
+
+  if (type === "ph" || type === "ph_sensor" || type === "turbidity" || type === "analog") {
+    return {
+      ...base,
+      adc_pin: takePin(current.adc_pin || current.analog_pin),
+      read_interval_ms: Number(current.read_interval_ms || 3000),
+      calibration_offset: Number(current.calibration_offset || 0),
+    };
+  }
+
+  if (type === "servo_feeder" || type === "servo") {
+    return {
+      ...base,
+      signal_pin: takePin(current.signal_pin),
+      default_angle: Number(current.default_angle || 0),
+      feed_angle: Number(current.feed_angle || current.active_angle || 90),
+      duration_ms: Number(current.duration_ms || 800),
+    };
+  }
+
+  return {
+    ...base,
+    output_pin: takePin(current.output_pin),
+    default_state: current.default_state || "off",
+    active_state: current.active_state || "on",
+    active_high: current.active_high ?? true,
+  };
+}
+
+function getWirelessNodePinConflict(
+  draftConfig: Record<string, any>,
+  deviceModules: any[],
+  targetNodeCode: string
+): { conflictPins: number[]; conflictDetails: string[] } {
+  const currentPins = WIRELESS_NODE_PIN_KEYS.flatMap((key) => {
+    const pin = toWirelessPinNumber(draftConfig[key]);
+    return pin === null ? [] : [pin];
+  });
+
+  const usedDetails = getWirelessNodeUsedPinDetails(deviceModules, targetNodeCode);
+  const usedByPin = new Map<number, WirelessNodeUsedPinDetail[]>();
+
+  for (const detail of usedDetails) {
+    const list = usedByPin.get(detail.pin) || [];
+    list.push(detail);
+    usedByPin.set(detail.pin, list);
+  }
+
+  const conflictPins = Array.from(new Set(currentPins.filter((pin) => usedByPin.has(pin)))).sort((a, b) => a - b);
+  const conflictDetails = conflictPins.flatMap((pin) =>
+    (usedByPin.get(pin) || []).map((detail) => "GPIO" + pin + " in " + detail.moduleLabel + "." + detail.key)
+  );
+
+  return { conflictPins, conflictDetails };
+}
+
 type DeviceInfo = {
   id: number;
   tank_id: number;
@@ -848,7 +1046,71 @@ export default function ModulesPage() {
     }
   }, [moduleType, modules, gpioInfo?.free_pins, connectionType]);
 
-  const handleTankChange = (tankId: string) => {
+  
+  const wirelessNodeConfigDraft = useMemo(
+    () => parseWirelessModuleConfigSafe(configText),
+    [configText]
+  );
+
+  const isWirelessModuleForm = connectionType === "wireless";
+
+  const wirelessNodeTypeForPins = String(
+    nodeType || wirelessNodeConfigDraft.node_type || "esp32_s3mini"
+  );
+
+  const wirelessNodeCodeForPins = String(
+    nodeCode || wirelessNodeConfigDraft.node_code || "S3_WATER_01"
+  );
+
+  const wirelessModuleTypeForPins = String(
+    moduleType || wirelessNodeConfigDraft.module_type || "hc_sr04"
+  );
+
+  const wirelessNodePinInfo = useMemo(
+    () => getWirelessNodePinInfo(modules as any[], wirelessNodeTypeForPins, wirelessNodeCodeForPins),
+    [modules, wirelessNodeTypeForPins, wirelessNodeCodeForPins]
+  );
+
+  const wirelessNodePinConflict = useMemo(
+    () =>
+      getWirelessNodePinConflict(
+        {
+          ...wirelessNodeConfigDraft,
+          protocol: protocol || wirelessNodeConfigDraft.protocol || "esp_now",
+          node_type: wirelessNodeTypeForPins,
+          node_code: wirelessNodeCodeForPins,
+          module_type: wirelessModuleTypeForPins,
+        },
+        modules as any[],
+        wirelessNodeCodeForPins
+      ),
+    [
+      wirelessNodeConfigDraft,
+      protocol,
+      wirelessNodeTypeForPins,
+      wirelessNodeCodeForPins,
+      wirelessModuleTypeForPins,
+      modules,
+    ]
+  );
+
+  const applyWirelessNodeJsonSuggestion = () => {
+    const nextConfig = buildSuggestedWirelessNodeConfig(
+      {
+        ...wirelessNodeConfigDraft,
+        protocol: protocol || wirelessNodeConfigDraft.protocol || "esp_now",
+        node_type: wirelessNodeTypeForPins,
+        node_code: wirelessNodeCodeForPins,
+        module_type: wirelessModuleTypeForPins,
+      },
+      wirelessNodePinInfo.freePins,
+      wirelessModuleTypeForPins
+    );
+
+    setConfigText(JSON.stringify(nextConfig, null, 2));
+  };
+
+const handleTankChange = (tankId: string) => {
     setSelectedTankId(tankId);
     setConfigAck(null);
 
@@ -903,7 +1165,16 @@ export default function ModulesPage() {
   const createModule = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedDeviceId) {
+    
+    if (isWirelessModuleForm && wirelessNodePinConflict.conflictPins.length > 0) {
+      setStatus(
+        "error",
+        "Wireless GPIO conflict: " + wirelessNodePinConflict.conflictDetails.join(", ")
+      );
+      return;
+    }
+
+if (!selectedDeviceId) {
       setStatus("error", "Vui lòng chọn thiết bị ESP trước");
       return;
     }
@@ -1871,7 +2142,60 @@ export default function ModulesPage() {
           )}
 
           <div style={{ marginTop: 16 }}>
-            <label>
+            
+                  {isWirelessModuleForm && (
+                    <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs text-slate-700">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-slate-800">Wireless node GPIO suggestions</p>
+                          <p className="text-slate-600">
+                            Node: {wirelessNodeCodeForPins || "N/A"} | Board: {wirelessNodeTypeForPins || "N/A"}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={applyWirelessNodeJsonSuggestion}
+                          className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-700"
+                        >
+                          Auto suggest JSON from free GPIO
+                        </button>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <div className="rounded-lg bg-white p-2">
+                          <p className="font-semibold text-slate-700">Board pins</p>
+                          <p className="break-words text-slate-600">
+                            {wirelessNodePinInfo.boardPins.join(", ") || "None"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg bg-white p-2">
+                          <p className="font-semibold text-slate-700">Free GPIO on node</p>
+                          <p className="break-words text-slate-600">
+                            {wirelessNodePinInfo.freePins.join(", ") || "None"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg bg-white p-2">
+                          <p className="font-semibold text-slate-700">Used wireless GPIO</p>
+                          <p className="break-words text-slate-600">
+                            {wirelessNodePinInfo.usedDetails
+                              .map((item) => "GPIO" + item.pin + ":" + item.moduleLabel + "." + item.key)
+                              .join(", ") || "None"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {wirelessNodePinConflict.conflictPins.length > 0 && (
+                        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-red-700">
+                          GPIO conflict: {wirelessNodePinConflict.conflictDetails.join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+<label>
               <b>config_json</b>
               <textarea
                 value={configText}
