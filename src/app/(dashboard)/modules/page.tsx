@@ -124,8 +124,8 @@ const defaultConfigByType = (moduleType: string) => {
 
     case "hc_sr04":
       return {
-        trig_pin: 4,
-        echo_pin: 5,
+        trig_pin: 6,
+        echo_pin: 7,
         tank_depth_cm: 30,
         mount_offset_cm: 0,
         read_interval_ms: 5000,
@@ -497,8 +497,8 @@ export default function ModulesPage() {
   const [pin3, setPin3] = useState("");
 
   const [protocol, setProtocol] = useState("esp_now");
-  const [nodeType, setNodeType] = useState("esp32_c3");
-  const [nodeCode, setNodeCode] = useState("C3_WATER_01");
+  const [nodeType, setNodeType] = useState("esp32_s3mini");
+  const [nodeCode, setNodeCode] = useState("S3_WATER_01");
 
   const [configText, setConfigText] = useState(
     JSON.stringify(defaultConfigByType("ds18b20"), null, 2)
@@ -1633,8 +1633,8 @@ export default function ModulesPage() {
               >
                 <b>Gợi ý:</b>
                 <p style={{ margin: "6px 0 0" }}>
-                  Với ESP32-C3 không dây, đặt Node code cố định như{" "}
-                  <b>C3_WATER_01</b>. Gateway ESP32 chính sẽ dùng node code này
+                  Với ESP32-S3 mini không dây, đặt Node code cố định như{" "}
+                  <b>S3_WATER_01</b>. Gateway ESP32 chính sẽ dùng node code này
                   để nhận diện dữ liệu gửi về qua ESP-NOW hoặc MQTT direct.
                 </p>
               </div>
@@ -1667,7 +1667,7 @@ export default function ModulesPage() {
                     value={nodeType}
                     onChange={(e) => setNodeType(e.target.value)}
                     style={inputStyle}
-                    placeholder="esp32_c3"
+                    placeholder="esp32_s3mini"
                   />
                 </label>
 
@@ -1677,7 +1677,7 @@ export default function ModulesPage() {
                     value={nodeCode}
                     onChange={(e) => setNodeCode(e.target.value)}
                     style={inputStyle}
-                    placeholder="C3_WATER_01"
+                    placeholder="S3_WATER_01"
                   />
                 </label>
               </div>
