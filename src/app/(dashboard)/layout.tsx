@@ -533,6 +533,18 @@ export default function DashboardLayout({
     };
   };
 
+  const getNotificationHref = (item: RealtimeNotification) => {
+    if (item.id.startsWith("support_updated_")) {
+      return "/support";
+    }
+
+    if (item.id.startsWith("support_created_")) {
+      return "/admin/support";
+    }
+
+    return item.href || "/alerts";
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc]">
@@ -785,7 +797,7 @@ export default function DashboardLayout({
                         <div
                           key={item.id}
                           onClick={() => {
-                            router.push(item.href || "/alerts");
+                            router.push(getNotificationHref(item));
                             setIsNotificationOpen(false);
                             setUnreadCount(0);
                           }}
