@@ -77,9 +77,7 @@ export default function TanksPage() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<
-    Record<string, boolean>
-  >({});
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   const getToken = () => {
     if (typeof window === "undefined") return "";
@@ -99,9 +97,9 @@ export default function TanksPage() {
     try {
       const token = getToken();
 
-      const res = await fetch(`${API_URL}/api/tanks`, {
+      const res = await fetch(API_URL + "/api/tanks", {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: "Bearer " + token,
         },
       });
 
@@ -144,11 +142,11 @@ export default function TanksPage() {
         body.package_type = packageType;
       }
 
-      const res = await fetch(`${API_URL}/api/tanks`, {
+      const res = await fetch(API_URL + "/api/tanks", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: "Bearer " + token,
         },
         body: JSON.stringify(body),
       });
@@ -187,11 +185,14 @@ export default function TanksPage() {
 
       const token = getToken();
 
-      const res = await fetch(`${API_URL}/api/tanks/${tank.id}/delete-preview`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res = await fetch(
+        API_URL + "/api/tanks/" + tank.id + "/delete-preview",
+        {
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }
+      );
 
       const data = await res.json();
 
@@ -228,15 +229,12 @@ export default function TanksPage() {
 
       const token = getToken();
 
-      const res = await fetch(
-        `${API_URL}/api/tanks/${deletePreview.tank.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(API_URL + "/api/tanks/" + deletePreview.tank.id, {
+        method: "DELETE",
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      });
 
       const data = await res.json();
 
@@ -275,6 +273,12 @@ export default function TanksPage() {
 
   const isAdmin = currentUser?.role === "admin";
 
+  const isErrorMessage =
+    message.includes("thất bại") ||
+    message.includes("Không") ||
+    message.includes("không") ||
+    message.includes("chỉ cho phép");
+
   const renderAccordion = (
     key: string,
     title: string,
@@ -284,307 +288,269 @@ export default function TanksPage() {
     const isOpen = Boolean(expandedSections[key]);
 
     return (
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 14,
-          marginBottom: 10,
-          overflow: "hidden",
-          background: "#fff",
-        }}
-      >
+      <div className="mb-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <button
           type="button"
           onClick={() => toggleSection(key)}
-          style={{
-            width: "100%",
-            border: "none",
-            background: "#f8fafc",
-            padding: "12px 14px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            cursor: "pointer",
-            fontWeight: "bold",
-            color: "#0f172a",
-          }}
+          className="flex w-full items-center justify-between bg-slate-50 px-4 py-3 text-left font-black text-slate-800"
         >
           <span>
             {isOpen ? "−" : "+"} {title}
           </span>
           <span
-            style={{
-              background: count > 0 ? "#fee2e2" : "#e2e8f0",
-              color: count > 0 ? "#dc2626" : "#475569",
-              borderRadius: 999,
-              padding: "4px 10px",
-              fontSize: 12,
-            }}
+            className={[
+              "rounded-full px-3 py-1 text-xs font-black",
+              count > 0 ? "bg-red-100 text-red-600" : "bg-slate-200 text-slate-600",
+            ].join(" ")}
           >
             {count}
           </span>
         </button>
 
-        {isOpen && (
-          <div
-            style={{
-              padding: 14,
-              color: "#334155",
-              fontSize: 14,
-              lineHeight: 1.6,
-            }}
-          >
-            {children}
-          </div>
-        )}
+        {isOpen && <div className="p-4 text-sm leading-6 text-slate-700">{children}</div>}
       </div>
     );
   };
 
-  return (
-    <main style={{ padding: 24, maxWidth: 1150 }}>
-      <h1>Bể cá của tôi</h1>
+  const renderDeleteButton = (tank: Tank) => {
+    if (!canDeleteTank(tank)) {
+      return <span className="text-sm font-bold text-slate-400">Không có quyền</span>;
+    }
 
-      <section
-        style={{
-          border: "1px solid #ddd",
-          padding: 16,
-          borderRadius: 8,
-          marginBottom: 24,
-          background: "#fff",
-        }}
+    return (
+      <button
+        onClick={() => openDeletePreview(tank)}
+        className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-600 transition hover:bg-red-100"
       >
-        <h2>Tạo bể cá mới</h2>
+        Xóa
+      </button>
+    );
+  };
 
-        <form onSubmit={handleCreateTank}>
-          <div style={{ marginBottom: 12 }}>
-            <label>Tên bể cá</label>
-            <br />
+  const packageBadge = (value: string) => (
+    <span
+      className={[
+        "rounded-full px-3 py-1 text-xs font-black uppercase",
+        value === "premium"
+          ? "bg-violet-50 text-violet-700"
+          : "bg-blue-50 text-blue-700",
+      ].join(" ")}
+    >
+      {value}
+    </span>
+  );
+
+  return (
+    <main className="w-full max-w-6xl px-0 md:px-2">
+      <h1 className="mb-4 text-2xl font-black text-slate-800">Bể cá của tôi</h1>
+
+      <section className="mb-6 rounded-3xl border border-pink-200 bg-white p-4 shadow-sm shadow-pink-100/50 md:p-6">
+        <h2 className="mb-4 text-xl font-black text-slate-800">Tạo bể cá mới</h2>
+
+        <form onSubmit={handleCreateTank} className="space-y-4">
+          <div>
+            <label className="mb-2 block font-bold text-pink-900">Tên bể cá</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ví dụ: Bể cá phòng khách"
-              style={{ width: "100%", padding: 8 }}
+              className="w-full rounded-2xl border border-pink-300 px-4 py-3 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-100"
             />
           </div>
 
           {isAdmin ? (
-            <div style={{ marginBottom: 12 }}>
-              <label>Gói sử dụng</label>
-              <br />
+            <div>
+              <label className="mb-2 block font-bold text-pink-900">
+                Gói sử dụng
+              </label>
               <select
                 value={packageType}
                 onChange={(e) =>
                   setPackageType(e.target.value as "basic" | "premium")
                 }
-                style={{ width: "100%", padding: 8 }}
+                className="w-full rounded-2xl border border-pink-300 px-4 py-3 outline-none focus:border-pink-500 focus:ring-4 focus:ring-pink-100"
               >
                 <option value="basic">Basic</option>
                 <option value="premium">Premium</option>
               </select>
 
-              <p style={{ marginTop: 8, color: "#555" }}>
+              <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
                 {packageType === "basic"
                   ? "Basic: gói mặc định, tối đa 1 bể cho user thường, tối đa 3 thiết bị/bể, biểu đồ 20 điểm."
                   : "Premium: gói nâng cấp do admin cấp, nhiều bể, nhiều thiết bị, biểu đồ 100 điểm, hỗ trợ camera/cảnh báo nâng cao."}
               </p>
             </div>
           ) : (
-            <div
-              style={{
-                marginBottom: 12,
-                padding: 12,
-                background: "#eef6ff",
-                borderRadius: 8,
-              }}
-            >
-              <b>Gói hiện tại khi tạo bể: Basic</b>
-              <p style={{ margin: "8px 0 0", color: "#555" }}>
+            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+              <b className="text-cyan-900">Gói hiện tại khi tạo bể: Basic</b>
+              <p className="mt-2 text-sm font-semibold text-cyan-800">
                 Người dùng thường không thể tự chọn Premium. Vui lòng liên hệ
                 admin để nâng cấp gói.
               </p>
             </div>
           )}
 
-          <button type="submit" style={{ padding: "10px 16px" }}>
+          <button
+            type="submit"
+            className="rounded-2xl border border-pink-400 px-5 py-3 font-black text-pink-700 transition hover:bg-pink-50 active:scale-95"
+          >
             Tạo bể cá
           </button>
         </form>
 
         {message && (
           <p
-            style={{
-              color:
-                message.includes("thất bại") ||
-                message.includes("Không") ||
-                message.includes("không") ||
-                message.includes("chỉ cho phép")
-                  ? "red"
-                  : "green",
-              fontWeight: "bold",
-            }}
+            className={[
+              "mt-4 rounded-2xl border p-3 font-black",
+              isErrorMessage
+                ? "border-red-200 bg-red-50 text-red-600"
+                : "border-green-200 bg-green-50 text-green-700",
+            ].join(" ")}
           >
             {message}
           </p>
         )}
       </section>
 
-      <section>
-        <h2>Danh sách bể cá</h2>
+      <section className="rounded-3xl border border-pink-200 bg-white p-4 shadow-sm shadow-pink-100/50 md:p-6">
+        <h2 className="mb-4 text-xl font-black text-slate-800">Danh sách bể cá</h2>
 
-        <table
-          border={1}
-          cellPadding={8}
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            background: "#fff",
-          }}
-        >
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Mã bể</th>
-              <th>Tên bể</th>
-              <th>Gói</th>
-              <th>Người sở hữu</th>
-              <th>Ngày tạo</th>
-              <th>Hành động</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {tanks.map((tank) => (
-              <tr key={tank.id}>
-                <td>{tank.id}</td>
-                <td>{tank.tank_code}</td>
-                <td>{tank.name}</td>
-                <td>
-                  <span
-                    style={{
-                      fontWeight: "bold",
-                      color:
-                        tank.package_type === "premium" ? "#7c3aed" : "#2563eb",
-                    }}
-                  >
-                    {tank.package_type}
-                  </span>
-                </td>
-                <td>{tank.full_name || tank.email || tank.user_id}</td>
-                <td>{formatDate(tank.created_at)}</td>
-                <td>
-                  {canDeleteTank(tank) ? (
-                    <button
-                      onClick={() => openDeletePreview(tank)}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        border: "1px solid #fecdd3",
-                        background: "#fff1f2",
-                        color: "#dc2626",
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Xóa
-                    </button>
-                  ) : (
-                    <span style={{ color: "#94a3b8" }}>Không có quyền</span>
-                  )}
-                </td>
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full min-w-[850px] border-collapse overflow-hidden rounded-2xl bg-white text-sm">
+            <thead>
+              <tr className="bg-pink-50 text-pink-900">
+                <th className="border border-pink-100 p-3 text-left">ID</th>
+                <th className="border border-pink-100 p-3 text-left">Mã bể</th>
+                <th className="border border-pink-100 p-3 text-left">Tên bể</th>
+                <th className="border border-pink-100 p-3 text-left">Gói</th>
+                <th className="border border-pink-100 p-3 text-left">
+                  Người sở hữu
+                </th>
+                <th className="border border-pink-100 p-3 text-left">
+                  Ngày tạo
+                </th>
+                <th className="border border-pink-100 p-3 text-left">
+                  Hành động
+                </th>
               </tr>
-            ))}
+            </thead>
 
-            {tanks.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center" }}>
-                  Chưa có bể cá nào
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            <tbody>
+              {tanks.map((tank) => (
+                <tr key={tank.id} className="hover:bg-slate-50">
+                  <td className="border border-pink-100 p-3">{tank.id}</td>
+                  <td className="border border-pink-100 p-3 font-bold">
+                    {tank.tank_code}
+                  </td>
+                  <td className="border border-pink-100 p-3">{tank.name}</td>
+                  <td className="border border-pink-100 p-3">
+                    {packageBadge(tank.package_type)}
+                  </td>
+                  <td className="border border-pink-100 p-3">
+                    {tank.full_name || tank.email || tank.user_id}
+                  </td>
+                  <td className="border border-pink-100 p-3">
+                    {formatDate(tank.created_at)}
+                  </td>
+                  <td className="border border-pink-100 p-3">
+                    {renderDeleteButton(tank)}
+                  </td>
+                </tr>
+              ))}
+
+              {tanks.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="border border-pink-100 p-6 text-center">
+                    Chưa có bể cá nào
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="space-y-3 md:hidden">
+          {tanks.map((tank) => (
+            <article
+              key={tank.id}
+              className="rounded-2xl border border-pink-100 bg-white p-4 shadow-sm"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-black text-slate-800">{tank.name}</h3>
+                  <p className="mt-1 text-xs font-bold text-slate-400">
+                    ID #{tank.id} · {tank.tank_code}
+                  </p>
+                </div>
+                {packageBadge(tank.package_type)}
+              </div>
+
+              <div className="space-y-2 text-sm text-slate-600">
+                <p>
+                  <b>Người sở hữu:</b>{" "}
+                  {tank.full_name || tank.email || tank.user_id}
+                </p>
+                <p>
+                  <b>Ngày tạo:</b> {formatDate(tank.created_at)}
+                </p>
+              </div>
+
+              <div className="mt-4">{renderDeleteButton(tank)}</div>
+            </article>
+          ))}
+
+          {tanks.length === 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center font-semibold text-slate-500">
+              Chưa có bể cá nào
+            </div>
+          )}
+        </div>
       </section>
 
       {(deletePreview || isPreviewLoading || deleteMessage) && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.55)",
-            zIndex: 100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-          }}
-        >
-          <div
-            style={{
-              width: "min(760px, 100%)",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              background: "#fff",
-              borderRadius: 20,
-              padding: 22,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-            }}
-          >
-            <h2 style={{ marginTop: 0, color: "#dc2626" }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-3 md:p-6">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl md:p-6">
+            <h2 className="mb-4 text-xl font-black text-red-600">
               Xác nhận xóa bể cá
             </h2>
 
             {isPreviewLoading && <p>Đang tải thông tin sẽ bị xóa...</p>}
 
             {deleteMessage && (
-              <p style={{ color: "#dc2626", fontWeight: "bold" }}>
+              <p className="rounded-2xl border border-red-200 bg-red-50 p-3 font-black text-red-600">
                 {deleteMessage}
               </p>
             )}
 
             {deletePreview && (
               <>
-                <div
-                  style={{
-                    border: "1px solid #fecdd3",
-                    background: "#fff1f2",
-                    borderRadius: 16,
-                    padding: 14,
-                    marginBottom: 14,
-                  }}
-                >
-                  <p style={{ margin: "4px 0" }}>
+                <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-slate-700">
+                  <p>
                     <b>Bể:</b> {deletePreview.tank.name}
                   </p>
-                  <p style={{ margin: "4px 0" }}>
+                  <p>
                     <b>Mã bể:</b> {deletePreview.tank.tank_code}
                   </p>
-                  <p style={{ margin: "4px 0" }}>
+                  <p>
                     <b>Chủ bể:</b>{" "}
                     {deletePreview.tank.owner.full_name ||
                       deletePreview.tank.owner.email ||
                       deletePreview.tank.owner.id}
                   </p>
-                  <p style={{ margin: "4px 0" }}>
+                  <p>
                     <b>Quyền xóa:</b> {deletePreview.permission_note}
                   </p>
 
                   {isAdmin &&
                     Number(deletePreview.tank.user_id) !==
                       Number(currentUser?.id) && (
-                      <p
-                        style={{
-                          margin: "8px 0 0",
-                          color: "#b45309",
-                          fontWeight: "bold",
-                        }}
-                      >
+                      <p className="mt-2 font-black text-amber-700">
                         Bạn đang xóa bể của user khác.
                       </p>
                     )}
                 </div>
 
-                <p style={{ fontWeight: "bold", color: "#dc2626" }}>
+                <p className="mb-4 font-black text-red-600">
                   Hành động này sẽ xóa vĩnh viễn các dữ liệu bên dưới và không
                   thể khôi phục.
                 </p>
@@ -598,30 +564,18 @@ export default function TanksPage() {
                       {deletePreview.details.devices.map((device) => (
                         <div
                           key={device.id}
-                          style={{
-                            padding: 10,
-                            border: "1px solid #e2e8f0",
-                            borderRadius: 12,
-                            marginBottom: 8,
-                          }}
+                          className="mb-2 rounded-2xl border border-slate-200 p-3"
                         >
                           <b>
                             {device.name || "Không tên"} #{device.id}
                           </b>
-                          <p style={{ margin: "4px 0" }}>
-                            Mã: {device.device_code || "Không có"}
-                          </p>
-                          <p style={{ margin: "4px 0" }}>
-                            Trạng thái: {device.status || "Không rõ"}
-                          </p>
-                          <p style={{ margin: "4px 0" }}>
-                            Last seen: {formatDate(device.last_seen)}
-                          </p>
-                          <p style={{ margin: "4px 0" }}>
+                          <p>Mã: {device.device_code || "Không có"}</p>
+                          <p>Trạng thái: {device.status || "Không rõ"}</p>
+                          <p>Last seen: {formatDate(device.last_seen)}</p>
+                          <p>
                             Sensor data: {device.sensor_data_count || 0} bản ghi
-                            | Actuator state:{" "}
-                            {device.actuator_state_count || 0} | Alerts:{" "}
-                            {device.alert_count || 0}
+                            · Actuator state: {device.actuator_state_count || 0}
+                            · Alerts: {device.alert_count || 0}
                           </p>
                         </div>
                       ))}
@@ -637,36 +591,20 @@ export default function TanksPage() {
                   deletePreview.summary.sensor_data,
                   deletePreview.details.sensor_data_by_device.length > 0 ? (
                     <div>
-                      {deletePreview.details.sensor_data_by_device.map(
-                        (item) => (
-                          <div
-                            key={item.device_id}
-                            style={{
-                              padding: 10,
-                              border: "1px solid #e2e8f0",
-                              borderRadius: 12,
-                              marginBottom: 8,
-                            }}
-                          >
-                            <b>
-                              {item.device_name || "Thiết bị"} #
-                              {item.device_id}
-                            </b>
-                            <p style={{ margin: "4px 0" }}>
-                              Mã: {item.device_code || "Không có"}
-                            </p>
-                            <p style={{ margin: "4px 0" }}>
-                              Số bản ghi: {item.count || 0}
-                            </p>
-                            <p style={{ margin: "4px 0" }}>
-                              Từ: {formatDate(item.first_created_at)}
-                            </p>
-                            <p style={{ margin: "4px 0" }}>
-                              Đến: {formatDate(item.last_created_at)}
-                            </p>
-                          </div>
-                        )
-                      )}
+                      {deletePreview.details.sensor_data_by_device.map((item) => (
+                        <div
+                          key={item.device_id}
+                          className="mb-2 rounded-2xl border border-slate-200 p-3"
+                        >
+                          <b>
+                            {item.device_name || "Thiết bị"} #{item.device_id}
+                          </b>
+                          <p>Mã: {item.device_code || "Không có"}</p>
+                          <p>Số bản ghi: {item.count || 0}</p>
+                          <p>Từ: {formatDate(item.first_created_at)}</p>
+                          <p>Đến: {formatDate(item.last_created_at)}</p>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <p>Không có dữ liệu cảm biến.</p>
@@ -682,25 +620,18 @@ export default function TanksPage() {
                       {deletePreview.details.actuator_states.map((item) => (
                         <div
                           key={item.id}
-                          style={{
-                            padding: 10,
-                            border: "1px solid #e2e8f0",
-                            borderRadius: 12,
-                            marginBottom: 8,
-                          }}
+                          className="mb-2 rounded-2xl border border-slate-200 p-3"
                         >
                           <b>
                             {item.device_name || "Thiết bị"} #{item.device_id}
                           </b>
-                          <p style={{ margin: "4px 0" }}>
-                            Pump: {item.pump ? "ON" : "OFF"} | Light:{" "}
-                            {item.light ? "ON" : "OFF"} | Oxygen:{" "}
-                            {item.oxygen ? "ON" : "OFF"} | Auto:{" "}
+                          <p>
+                            Pump: {item.pump ? "ON" : "OFF"} · Light:{" "}
+                            {item.light ? "ON" : "OFF"} · Oxygen:{" "}
+                            {item.oxygen ? "ON" : "OFF"} · Auto:{" "}
                             {item.auto_mode ? "ON" : "OFF"}
                           </p>
-                          <p style={{ margin: "4px 0" }}>
-                            Lệnh cuối: {formatDate(item.last_command_at)}
-                          </p>
+                          <p>Lệnh cuối: {formatDate(item.last_command_at)}</p>
                         </div>
                       ))}
                     </div>
@@ -715,16 +646,14 @@ export default function TanksPage() {
                   deletePreview.summary.alerts,
                   <>
                     {deletePreview.details.alerts_by_type.length > 0 ? (
-                      <div style={{ marginBottom: 12 }}>
+                      <div className="mb-3">
                         <b>Nhóm theo loại cảnh báo</b>
-                        {deletePreview.details.alerts_by_type.map(
-                          (item, index) => (
-                            <p key={`${item.alert_type}_${index}`}>
-                              - {item.alert_type || "unknown"} /{" "}
-                              {item.severity || "unknown"}: {item.count} cảnh báo
-                            </p>
-                          )
-                        )}
+                        {deletePreview.details.alerts_by_type.map((item, index) => (
+                          <p key={String(item.alert_type) + "_" + String(index)}>
+                            - {item.alert_type || "unknown"} /{" "}
+                            {item.severity || "unknown"}: {item.count} cảnh báo
+                          </p>
+                        ))}
                       </div>
                     ) : (
                       <p>Không có cảnh báo.</p>
@@ -736,20 +665,13 @@ export default function TanksPage() {
                         {deletePreview.details.latest_alerts.map((alert) => (
                           <div
                             key={alert.id}
-                            style={{
-                              padding: 10,
-                              border: "1px solid #e2e8f0",
-                              borderRadius: 12,
-                              marginTop: 8,
-                            }}
+                            className="mt-2 rounded-2xl border border-slate-200 p-3"
                           >
-                            <p style={{ margin: "4px 0" }}>
+                            <p>
                               <b>{alert.alert_type}</b> - {alert.severity}
                             </p>
-                            <p style={{ margin: "4px 0" }}>{alert.message}</p>
-                            <p style={{ margin: "4px 0" }}>
-                              {formatDate(alert.created_at)}
-                            </p>
+                            <p>{alert.message}</p>
+                            <p>{formatDate(alert.created_at)}</p>
                           </div>
                         ))}
                       </div>
@@ -766,12 +688,7 @@ export default function TanksPage() {
                       {deletePreview.details.thresholds.map((item, index) => (
                         <pre
                           key={index}
-                          style={{
-                            background: "#f8fafc",
-                            padding: 10,
-                            borderRadius: 12,
-                            overflowX: "auto",
-                          }}
+                          className="overflow-x-auto rounded-2xl bg-slate-50 p-3 text-xs"
                         >
                           {JSON.stringify(item, null, 2)}
                         </pre>
@@ -788,14 +705,7 @@ export default function TanksPage() {
                   deletePreview.summary.camera_snapshots,
                   deletePreview.details.camera_snapshots.table_exists ? (
                     deletePreview.details.camera_snapshots.details.length > 0 ? (
-                      <pre
-                        style={{
-                          background: "#f8fafc",
-                          padding: 10,
-                          borderRadius: 12,
-                          overflowX: "auto",
-                        }}
-                      >
+                      <pre className="overflow-x-auto rounded-2xl bg-slate-50 p-3 text-xs">
                         {JSON.stringify(
                           deletePreview.details.camera_snapshots.details,
                           null,
@@ -816,14 +726,7 @@ export default function TanksPage() {
                   deletePreview.summary.device_modules,
                   deletePreview.details.device_modules.table_exists ? (
                     deletePreview.details.device_modules.details.length > 0 ? (
-                      <pre
-                        style={{
-                          background: "#f8fafc",
-                          padding: 10,
-                          borderRadius: 12,
-                          overflowX: "auto",
-                        }}
-                      >
+                      <pre className="overflow-x-auto rounded-2xl bg-slate-50 p-3 text-xs">
                         {JSON.stringify(
                           deletePreview.details.device_modules.details,
                           null,
@@ -838,23 +741,12 @@ export default function TanksPage() {
                   )
                 )}
 
-                <label
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "flex-start",
-                    padding: 12,
-                    border: "1px solid #fecdd3",
-                    background: "#fff1f2",
-                    borderRadius: 14,
-                    marginTop: 12,
-                  }}
-                >
+                <label className="mt-4 flex gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm">
                   <input
                     type="checkbox"
                     checked={deleteConfirmed}
                     onChange={(e) => setDeleteConfirmed(e.target.checked)}
-                    style={{ marginTop: 3 }}
+                    className="mt-1"
                   />
                   <span>
                     Tôi hiểu rằng bể cá và toàn bộ dữ liệu liên quan sẽ bị xóa
@@ -862,24 +754,11 @@ export default function TanksPage() {
                   </span>
                 </label>
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    gap: 10,
-                    marginTop: 18,
-                  }}
-                >
+                <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button
                     onClick={closeDeleteModal}
                     disabled={isDeleting}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: "1px solid #cbd5e1",
-                      background: "#fff",
-                      cursor: isDeleting ? "not-allowed" : "pointer",
-                    }}
+                    className="rounded-2xl border border-slate-200 px-4 py-3 font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed"
                   >
                     Hủy
                   </button>
@@ -887,19 +766,7 @@ export default function TanksPage() {
                   <button
                     onClick={handleDeleteTank}
                     disabled={!deleteConfirmed || isDeleting}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: "1px solid #dc2626",
-                      background:
-                        !deleteConfirmed || isDeleting ? "#fecaca" : "#dc2626",
-                      color: "#fff",
-                      fontWeight: "bold",
-                      cursor:
-                        !deleteConfirmed || isDeleting
-                          ? "not-allowed"
-                          : "pointer",
-                    }}
+                    className="rounded-2xl border border-red-600 bg-red-600 px-4 py-3 font-black text-white disabled:cursor-not-allowed disabled:border-red-200 disabled:bg-red-200"
                   >
                     {isDeleting ? "Đang xóa..." : "Xóa vĩnh viễn bể cá"}
                   </button>

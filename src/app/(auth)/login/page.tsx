@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Waves } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,6 +18,9 @@ export default function LoginPage() {
 
   const [otp, setOtp] = useState("");
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error" | "info">(
+    "info"
+  );
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -46,6 +49,7 @@ export default function LoginPage() {
 
       if (!res.ok) {
         setMessage(data.message || "Đăng nhập thất bại");
+        setMessageType("error");
         return;
       }
 
@@ -54,9 +58,11 @@ export default function LoginPage() {
       setMessage(
         "Mã OTP đã được gửi về Gmail đăng ký. Vui lòng kiểm tra hộp thư đến hoặc spam."
       );
+      setMessageType("success");
     } catch (err) {
       console.error(err);
       setMessage("Không kết nối được backend hoặc lỗi gửi OTP Gmail");
+      setMessageType("error");
     } finally {
       setLoading(false);
     }
@@ -83,6 +89,7 @@ export default function LoginPage() {
 
       if (!res.ok) {
         setMessage(data.message || "Xác thực OTP thất bại");
+        setMessageType("error");
         return;
       }
 
@@ -93,169 +100,165 @@ export default function LoginPage() {
     } catch (err) {
       console.error(err);
       setMessage("Không kết nối được backend");
+      setMessageType("error");
     } finally {
       setLoading(false);
     }
   };
 
+  const inputClass =
+    "w-full rounded-2xl border border-pink-300 px-4 py-3 text-slate-800 outline-none transition focus:border-pink-500 focus:ring-4 focus:ring-pink-100";
+
+  const buttonClass =
+    "rounded-2xl border border-pink-400 px-5 py-3 font-black text-pink-700 transition hover:bg-pink-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60";
+
   return (
-    <main
-      style={{
-        maxWidth: 420,
-        margin: "80px auto",
-        fontFamily: "Arial",
-      }}
-    >
-      <h1>Đăng nhập</h1>
-
-      {step === 1 && (
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: 12 }}>
-            <label>Email</label>
-            <input
-              name="email"
-              type="email"
-              value={loginForm.email}
-              onChange={handleLoginChange}
-              autoComplete="email"
-              style={{ width: "100%", padding: 8 }}
-            />
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#f8fafc] px-4 py-8 flex items-center justify-center">
+      <section className="w-full max-w-md">
+        <div className="mb-6 flex items-center justify-center gap-3">
+          <div className="rounded-2xl bg-pink-500 p-3 shadow-lg shadow-pink-200">
+            <Waves className="text-white" size={28} />
           </div>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-800">
+              SMART<span className="text-pink-600">AQ</span>
+            </h1>
+            <p className="text-xs font-semibold text-slate-400">
+              Smart Aquarium IoT
+            </p>
+          </div>
+        </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <label>Mật khẩu</label>
+        <div className="rounded-3xl border border-pink-200 bg-white p-5 shadow-xl shadow-pink-100/50 sm:p-7">
+          <h2 className="mb-5 text-xl font-black text-slate-800">
+            {step === 1 ? "Đăng nhập" : "Xác thực OTP"}
+          </h2>
 
-            <div style={{ position: "relative" }}>
-              <input
-                name="password"
-                type={showPassword ? "text" : "password"}
-                value={loginForm.password}
-                onChange={handleLoginChange}
-                autoComplete="current-password"
-                style={{
-                  width: "100%",
-                  padding: "8px 40px 8px 8px",
-                  boxSizing: "border-box",
-                }}
-              />
+          {step === 1 && (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="mb-2 block font-bold text-pink-900">
+                  Email
+                </label>
+                <input
+                  name="email"
+                  type="email"
+                  value={loginForm.email}
+                  onChange={handleLoginChange}
+                  autoComplete="email"
+                  className={inputClass}
+                />
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                style={{
-                  position: "absolute",
-                  right: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  color: "#9f4772",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 4,
-                }}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              <div>
+                <label className="mb-2 block font-bold text-pink-900">
+                  Mật khẩu
+                </label>
+
+                <div className="relative">
+                  <input
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={loginForm.password}
+                    onChange={handleLoginChange}
+                    autoComplete="current-password"
+                    className={inputClass + " pr-12"}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-2 text-pink-600 hover:bg-pink-50"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={loading} className={buttonClass}>
+                {loading ? "Đang gửi OTP..." : "Tiếp tục"}
               </button>
-            </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ padding: "10px 16px" }}
-          >
-            {loading ? "Đang gửi OTP..." : "Tiếp tục"}
-          </button>
+              <div className="space-y-2 pt-1 text-sm text-slate-600">
+                <p>
+                  Chưa có tài khoản?{" "}
+                  <Link
+                    href="/register"
+                    className="font-black text-pink-700 hover:underline"
+                  >
+                    Đăng ký
+                  </Link>
+                </p>
 
-          <div style={{ marginTop: 12 }}>
-            <p style={{ margin: "8px 0" }}>
-              Chưa có tài khoản?{" "}
-<Link
-  href="/register"
-  style={{
-    color: "#9f4772",
-    fontWeight: 600,
-    textDecoration: "none",
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.textDecoration = "underline";
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.textDecoration = "none";
-  }}
->
-  Đăng ký
-</Link>
+                <p>
+                  <Link
+                    href="/forgot-password"
+                    className="font-semibold text-pink-700 hover:underline"
+                  >
+                    Quên mật khẩu?
+                  </Link>
+                </p>
+              </div>
+            </form>
+          )}
+
+          {step === 2 && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <p className="rounded-2xl border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800">
+                Mã OTP đã được gửi về Gmail đăng ký. Vui lòng kiểm tra hộp thư
+                đến hoặc mục spam.
+              </p>
+
+              <div>
+                <label className="mb-2 block font-bold text-pink-900">
+                  Nhập mã OTP
+                </label>
+                <input
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.toUpperCase())}
+                  placeholder="Ví dụ: A7K2P9QX"
+                  className={inputClass + " uppercase tracking-widest"}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" disabled={loading} className={buttonClass}>
+                  {loading ? "Đang xác thực..." : "Xác thực OTP"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(1);
+                    setOtp("");
+                    setMessage("");
+                  }}
+                  className="rounded-2xl border border-slate-200 px-5 py-3 font-black text-slate-600 transition hover:bg-slate-50"
+                >
+                  Quay lại
+                </button>
+              </div>
+            </form>
+          )}
+
+          {message && (
+            <p
+              className={[
+                "mt-5 rounded-2xl border p-3 text-sm font-bold",
+                messageType === "error"
+                  ? "border-red-200 bg-red-50 text-red-600"
+                  : messageType === "success"
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-slate-200 bg-slate-50 text-slate-600",
+              ].join(" ")}
+            >
+              {message}
             </p>
-
-            <p style={{ margin: "8px 0" }}>
-              <Link href="/forgot-password">Quên mật khẩu?</Link>
-            </p>
-          </div>
-        </form>
-      )}
-
-      {step === 2 && (
-        <form onSubmit={handleVerifyOtp}>
-          <p style={{ background: "#eef6ff", padding: 8 }}>
-            Mã OTP đã được gửi về Gmail đăng ký. Vui lòng kiểm tra hộp thư đến
-            hoặc mục spam.
-          </p>
-
-          <div style={{ marginBottom: 12 }}>
-            <label>Nhập mã OTP</label>
-            <input
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.toUpperCase())}
-              placeholder="Ví dụ: A7K2P9QX"
-              style={{
-                width: "100%",
-                padding: 8,
-                textTransform: "uppercase",
-              }}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ padding: "10px 16px" }}
-          >
-            {loading ? "Đang xác thực..." : "Xác thực OTP"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setStep(1);
-              setOtp("");
-              setMessage("");
-            }}
-            style={{ padding: "10px 16px", marginLeft: 8 }}
-          >
-            Quay lại
-          </button>
-        </form>
-      )}
-
-      {message && (
-        <p
-          style={{
-            marginTop: 16,
-            color:
-              message.includes("thất bại") || message.includes("Không")
-                ? "red"
-                : "green",
-          }}
-        >
-          {message}
-        </p>
-      )}
+          )}
+        </div>
+      </section>
     </main>
   );
 }
