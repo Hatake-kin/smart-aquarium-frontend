@@ -482,6 +482,7 @@ export default function ModulesPage() {
   const [creating, setCreating] = useState(false);
   const [publishingConfig, setPublishingConfig] = useState(false);
   const [configAck, setConfigAck] = useState<ConfigAckPayload | null>(null);
+  const [latestSensorData, setLatestSensorData] = useState<any | null>(null);
   const [editingModuleId, setEditingModuleId] = useState<number | null>(null);
   const [editConfigText, setEditConfigText] = useState("");
   const [updatingModuleId, setUpdatingModuleId] = useState<number | null>(null);
@@ -770,6 +771,18 @@ export default function ModulesPage() {
         );
       }
     });
+    socket.on("sensor_update", (payload: any) => {
+      const eventDeviceId =
+        payload?.deviceId ?? payload?.device_id ?? payload?.data?.device_id;
+
+      if (String(eventDeviceId) !== String(selectedDeviceId)) {
+        return;
+      }
+
+      setLatestSensorData(payload);
+    });
+
+
 
     return () => {
       socket.disconnect();
@@ -1349,6 +1362,111 @@ export default function ModulesPage() {
             </button>
           </div>
         )}
+        {latestSensorData?.data && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 14,
+              borderRadius: 14,
+              background: "#f0f9ff",
+              border: "1px solid #7dd3fc",
+              color: "#0f172a",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <b>Wireless node realtime</b>
+                <p style={{ margin: "6px 0 0", color: "#475569" }}>
+                  Node:{" "}
+                  <b>{latestSensorData.data.wireless_node_code || "N/A"}</b> | Source:{" "}
+                  <b>{latestSensorData.data.water_level_source || "N/A"}</b>
+                </p>
+              </div>
+
+              <span
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  fontWeight: "bold",
+                  background: latestSensorData.data.wireless_node_online
+                    ? "#dcfce7"
+                    : "#fee2e2",
+                  color: latestSensorData.data.wireless_node_online
+                    ? "#166534"
+                    : "#991b1b",
+                  border: latestSensorData.data.wireless_node_online
+                    ? "1px solid #86efac"
+                    : "1px solid #fecaca",
+                }}
+              >
+                {latestSensorData.data.wireless_node_online ? "ONLINE" : "OFFLINE"}
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                gap: 10,
+                marginTop: 12,
+              }}
+            >
+              <div>
+                <b>Water level</b>
+                <p style={{ margin: "4px 0 0" }}>
+                  {latestSensorData.data.water_level ?? "N/A"}%
+                </p>
+              </div>
+
+              <div>
+                <b>Distance</b>
+                <p style={{ margin: "4px 0 0" }}>
+                  {latestSensorData.data.water_distance_cm ??
+                    latestSensorData.data.distance_cm ??
+                    "N/A"}{" "}
+                  cm
+                </p>
+              </div>
+
+              <div>
+                <b>Water cm</b>
+                <p style={{ margin: "4px 0 0" }}>
+                  {latestSensorData.data.water_level_cm ?? "N/A"} cm
+                </p>
+              </div>
+
+              <div>
+                <b>Packet age</b>
+                <p style={{ margin: "4px 0 0" }}>
+                  {latestSensorData.data.water_wireless_age_ms ?? "N/A"} ms
+                </p>
+              </div>
+
+              <div>
+                <b>Seq</b>
+                <p style={{ margin: "4px 0 0" }}>
+                  {latestSensorData.data.water_wireless_seq ?? "N/A"}
+                </p>
+              </div>
+
+              <div>
+                <b>Gateway RSSI</b>
+                <p style={{ margin: "4px 0 0" }}>
+                  {latestSensorData.data.rssi ?? "N/A"} dBm
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {message && <p style={statusStyle}>{message}</p>}
       </section>
